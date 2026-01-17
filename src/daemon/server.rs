@@ -33,7 +33,7 @@ pub async fn run_daemon() -> Result<()> {
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/graphql", post(graphql_handler))
-        .route("/sse/:session_id", get(sse_handler))
+        .route("/sse/{session_id}", get(sse_handler))
         .with_state(state);
 
     let addr = format!("{}:{}", DEFAULT_HOST, DEFAULT_PORT);

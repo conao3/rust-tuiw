@@ -1,5 +1,7 @@
+use crate::config::get_daemon_endpoint;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "rust-tuiw")]
@@ -13,18 +15,232 @@ pub struct Cli {
 pub enum Commands {
     Create {
         command: String,
+        #[arg(short, long, default_value = ".")]
+        cwd: String,
     },
     Send {
         session_id: String,
         keys: String,
     },
     List,
+    Output {
+        session_id: String,
+    },
+    Status {
+        session_id: String,
+    },
     Close {
         session_id: String,
     },
 }
 
-pub async fn run_client(_cli: Cli) -> Result<()> {
+#[derive(Serialize)]
+struct GraphQLRequest {
+    query: String,
+    variables: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct GraphQLResponse<T> {
+    data: Option<T>,
+    errors: Option<Vec<GraphQLError>>,
+}
+
+#[derive(Deserialize)]
+struct GraphQLError {
+    message: String,
+}
+
+pub async fn run_client(cli: Cli) -> Result<()> {
     tracing::info!("running client");
+
+    let command = cli.command.unwrap_or_else(|| {
+        println!("No command provided. Use --help for usage information.");
+        std::process::exit(1);
+    });
+
+    match command {
+        Commands::Create { command, cwd } => {
+            let cwd = std::env::current_dir()?.join(&cwd).canonicalize()?;
+            let cwd_str = cwd.to_string_lossy().to_string();
+
+            #[derive(Deserialize)]
+            struct CreateSessionData {
+                #[serde(rename = "createSession")]
+                create_session: String,
+            }
+
+            let query = r#"
+                mutation CreateSession($input: CreateSessionInput!) {
+                    createSession(input: $input)
+                }
+            "#;
+
+            let variables = serde_json::json!({
+                "input": {
+                    "command": command,
+                    "cwd": cwd_str,
+                }
+            });
+
+            let response = send_graphql_request::<CreateSessionData>(query, variables).await?;
+            println!("Session created: {}", response.create_session);
+        }
+        Commands::Send { session_id, keys } => {
+            #[derive(Deserialize)]
+            struct SendKeysData {
+                #[serde(rename = "sendKeys")]
+                _send_keys: bool,
+            }
+
+            let query = r#"
+                mutation SendKeys($input: SendKeysInput!) {
+                    sendKeys(input: $input)
+                }
+            "#;
+
+            let variables = serde_json::json!({
+                "input": {
+                    "sessionId": session_id,
+                    "keys": keys,
+                }
+            });
+
+            send_graphql_request::<SendKeysData>(query, variables).await?;
+            println!("Keys sent successfully");
+        }
+        Commands::List => {
+            #[derive(Deserialize)]
+            struct Session {
+                id: String,
+                command: String,
+                cwd: String,
+            }
+
+            #[derive(Deserialize)]
+            struct ListSessionsData {
+                #[serde(rename = "listSessions")]
+                list_sessions: Vec<Session>,
+            }
+
+            let query = r#"
+                query ListSessions {
+                    listSessions {
+                        id
+                        command
+                        cwd
+                    }
+                }
+            "#;
+
+            let response =
+                send_graphql_request::<ListSessionsData>(query, serde_json::json!({})).await?;
+
+            if response.list_sessions.is_empty() {
+                println!("No sessions");
+            } else {
+                println!("Sessions:");
+                for session in response.list_sessions {
+                    println!("  {} - {} ({})", session.id, session.command, session.cwd);
+                }
+            }
+        }
+        Commands::Output { session_id } => {
+            #[derive(Deserialize)]
+            struct GetOutputData {
+                #[serde(rename = "getOutput")]
+                get_output: String,
+            }
+
+            let query = r#"
+                query GetOutput($sessionId: SessionId!) {
+                    getOutput(sessionId: $sessionId)
+                }
+            "#;
+
+            let variables = serde_json::json!({
+                "sessionId": session_id,
+            });
+
+            let response = send_graphql_request::<GetOutputData>(query, variables).await?;
+            println!("{}", response.get_output);
+        }
+        Commands::Status { session_id } => {
+            #[derive(Deserialize)]
+            struct GetSessionStatusData {
+                #[serde(rename = "getSessionStatus")]
+                get_session_status: String,
+            }
+
+            let query = r#"
+                query GetSessionStatus($sessionId: SessionId!) {
+                    getSessionStatus(sessionId: $sessionId)
+                }
+            "#;
+
+            let variables = serde_json::json!({
+                "sessionId": session_id,
+            });
+
+            let response =
+                send_graphql_request::<GetSessionStatusData>(query, variables).await?;
+            println!("Status: {}", response.get_session_status);
+        }
+        Commands::Close { session_id } => {
+            #[derive(Deserialize)]
+            struct CloseSessionData {
+                #[serde(rename = "closeSession")]
+                close_session: bool,
+            }
+
+            let query = r#"
+                mutation CloseSession($sessionId: SessionId!) {
+                    closeSession(sessionId: $sessionId)
+                }
+            "#;
+
+            let variables = serde_json::json!({
+                "sessionId": session_id,
+            });
+
+            let response = send_graphql_request::<CloseSessionData>(query, variables).await?;
+            if response.close_session {
+                println!("Session closed successfully");
+            } else {
+                println!("Session not found");
+            }
+        }
+    }
+
     Ok(())
+}
+
+async fn send_graphql_request<T: for<'de> Deserialize<'de>>(
+    query: &str,
+    variables: serde_json::Value,
+) -> Result<T> {
+    let endpoint = get_daemon_endpoint();
+    let client = reqwest::Client::new();
+
+    let request = GraphQLRequest {
+        query: query.to_string(),
+        variables,
+    };
+
+    let response = client
+        .post(format!("{}/graphql", endpoint))
+        .json(&request)
+        .send()
+        .await?;
+
+    let graphql_response: GraphQLResponse<T> = response.json().await?;
+
+    if let Some(errors) = graphql_response.errors {
+        let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+        anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
+    }
+
+    graphql_response
+        .data
+        .ok_or_else(|| anyhow::anyhow!("No data in response"))
 }

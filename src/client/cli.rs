@@ -13,6 +13,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    Daemon,
     Create {
         command: String,
         #[arg(short, long, default_value = ".")]
@@ -60,6 +61,9 @@ pub async fn run_client(cli: Cli) -> Result<()> {
     });
 
     match command {
+        Commands::Daemon => {
+            unreachable!("daemon command should be handled in main");
+        }
         Commands::Create { command, cwd } => {
             let cwd = std::env::current_dir()?.join(&cwd).canonicalize()?;
             let cwd_str = cwd.to_string_lossy().to_string();

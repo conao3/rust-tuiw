@@ -4,6 +4,8 @@
 [![Documentation](https://docs.rs/tuiw/badge.svg)](https://docs.rs/tuiw)
 [![License](https://img.shields.io/crates/l/tuiw.svg)](https://github.com/conao3/rust-tuiw/blob/master/LICENSE)
 
+![rust-tuiw](./.github/img/thumbnail.png)
+
 TUI applications wrapper with tmux for headless operation.
 
 ## Overview

@@ -106,6 +106,151 @@ Since rust-tuiw works with any TUI application, it enables automation for:
 - **CLI Parsing**: clap
 - **Process Management**: tmux
 
+## Getting Started
+
+### Prerequisites
+
+- Rust toolchain (1.91.1 or later)
+- tmux
+- NixOS users: Use `nix develop` for development environment
+
+### Installation
+
+```bash
+git clone https://github.com/conao3/rust-tuiw.git
+cd rust-tuiw
+cargo build --release
+```
+
+The binary will be available at `target/release/rust-tuiw`.
+
+### Basic Usage
+
+#### 1. Create a Session
+
+Create a new TUI session by specifying the command to run:
+
+```bash
+rust-tuiw create "bash"
+```
+
+This will output a session ID (UUID format):
+```
+Session created: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+You can also specify a working directory:
+
+```bash
+rust-tuiw create "vim" --cwd /path/to/project
+```
+
+#### 2. List Sessions
+
+View all active sessions:
+
+```bash
+rust-tuiw list
+```
+
+Output:
+```
+Sessions:
+  a1b2c3d4-e5f6-7890-abcd-ef1234567890 - bash (/home/user)
+```
+
+#### 3. Send Keys
+
+Send keyboard input to a session:
+
+```bash
+rust-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "echo hello"
+rust-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
+```
+
+#### 4. Get Output
+
+Capture the current screen content:
+
+```bash
+rust-tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+#### 5. Check Status
+
+Check if a session is running:
+
+```bash
+rust-tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+#### 6. Close Session
+
+Terminate a session:
+
+```bash
+rust-tuiw close a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+### Example: Automating vim
+
+```bash
+# Create a vim session
+SESSION_ID=$(rust-tuiw create "vim" | grep -oE '[0-9a-f-]{36}')
+
+# Open a file
+rust-tuiw send $SESSION_ID ":e test.txt"
+rust-tuiw send $SESSION_ID "Enter"
+
+# Enter insert mode and type
+rust-tuiw send $SESSION_ID "i"
+rust-tuiw send $SESSION_ID "Hello, World!"
+
+# Save and quit
+rust-tuiw send $SESSION_ID "Escape"
+rust-tuiw send $SESSION_ID ":wq"
+rust-tuiw send $SESSION_ID "Enter"
+
+# Close session
+rust-tuiw close $SESSION_ID
+```
+
+### SSE for Real-time Monitoring
+
+Subscribe to screen changes via Server-Sent Events:
+
+```bash
+curl -N http://127.0.0.1:50051/sse/<session-id>
+```
+
+This streams output whenever the screen content changes.
+
+### GraphQL API
+
+The daemon exposes a GraphQL API at `http://127.0.0.1:50051/graphql`:
+
+```bash
+curl -X POST http://127.0.0.1:50051/graphql \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query { listSessions { id command cwd } }"
+  }'
+```
+
+### Troubleshooting
+
+**Daemon not starting:**
+- Check if port 50051 is available
+- Ensure tmux is installed and in PATH
+
+**Session not found:**
+- The daemon is stateless and sessions are lost on restart
+- Verify the session ID is correct using `rust-tuiw list`
+
+**Keys not being sent:**
+- Ensure the session is still running with `rust-tuiw status`
+- Special keys like Enter, Escape, Tab should be sent as separate commands
+
 ## Development
 
 See `Makefile` for available commands:

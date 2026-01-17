@@ -1,9 +1,9 @@
 use crate::daemon::session::SessionManager;
 use crate::types::SessionId;
 use axum::{
+    Extension,
     extract::State,
     response::sse::{Event, Sse},
-    Extension,
 };
 use futures::stream::Stream;
 use std::convert::Infallible;

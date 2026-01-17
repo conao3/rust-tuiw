@@ -6,7 +6,11 @@ use crate::types::SessionId;
 use anyhow::Result;
 use async_graphql::Schema;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{extract::{Path, State}, routing::{get, post}, Extension, Router};
+use axum::{
+    Extension, Router,
+    extract::{Path, State},
+    routing::{get, post},
+};
 
 type AppSchema = Schema<Query, Mutation, Subscriptions>;
 
@@ -50,10 +54,7 @@ async fn health_check() -> &'static str {
     "ok"
 }
 
-async fn graphql_handler(
-    State(state): State<AppState>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
+async fn graphql_handler(State(state): State<AppState>, req: GraphQLRequest) -> GraphQLResponse {
     state.schema.execute(req.into_inner()).await.into()
 }
 
@@ -61,8 +62,8 @@ async fn sse_handler(
     State(state): State<AppState>,
     Path(session_id_str): Path<String>,
 ) -> Result<impl axum::response::IntoResponse, String> {
-    let uuid = uuid::Uuid::parse_str(&session_id_str)
-        .map_err(|_| "invalid session ID".to_string())?;
+    let uuid =
+        uuid::Uuid::parse_str(&session_id_str).map_err(|_| "invalid session ID".to_string())?;
     let session_id = SessionId(uuid);
 
     Ok(screen_changes_handler(State(state.session_manager), Extension(session_id)).await)

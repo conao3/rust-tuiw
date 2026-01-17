@@ -13,15 +13,7 @@ impl TmuxWrapper {
     #[allow(dead_code)]
     pub async fn create_session(&self, name: &str, command: &str, cwd: &str) -> Result<()> {
         let output = Command::new("tmux")
-            .args([
-                "new-session",
-                "-d",
-                "-s",
-                name,
-                "-c",
-                cwd,
-                command,
-            ])
+            .args(["new-session", "-d", "-s", name, "-c", cwd, command])
             .output()
             .await
             .context("failed to execute tmux new-session")?;
@@ -37,12 +29,7 @@ impl TmuxWrapper {
     #[allow(dead_code)]
     pub async fn send_keys(&self, session: &str, keys: &str) -> Result<()> {
         let output = Command::new("tmux")
-            .args([
-                "send-keys",
-                "-t",
-                session,
-                keys,
-            ])
+            .args(["send-keys", "-t", session, keys])
             .output()
             .await
             .context("failed to execute tmux send-keys")?;
@@ -58,12 +45,7 @@ impl TmuxWrapper {
     #[allow(dead_code)]
     pub async fn capture_pane(&self, session: &str) -> Result<String> {
         let output = Command::new("tmux")
-            .args([
-                "capture-pane",
-                "-t",
-                session,
-                "-p",
-            ])
+            .args(["capture-pane", "-t", session, "-p"])
             .output()
             .await
             .context("failed to execute tmux capture-pane")?;
@@ -82,11 +64,7 @@ impl TmuxWrapper {
     #[allow(dead_code)]
     pub async fn kill_session(&self, session: &str) -> Result<()> {
         let output = Command::new("tmux")
-            .args([
-                "kill-session",
-                "-t",
-                session,
-            ])
+            .args(["kill-session", "-t", session])
             .output()
             .await
             .context("failed to execute tmux kill-session")?;
@@ -102,11 +80,7 @@ impl TmuxWrapper {
     #[allow(dead_code)]
     pub async fn session_exists(&self, session: &str) -> Result<bool> {
         let output = Command::new("tmux")
-            .args([
-                "has-session",
-                "-t",
-                session,
-            ])
+            .args(["has-session", "-t", session])
             .output()
             .await
             .context("failed to execute tmux has-session")?;

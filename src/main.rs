@@ -7,7 +7,7 @@ mod types;
 
 use anyhow::Result;
 use clap::Parser;
-use client::cli::{run_client, Cli, Commands};
+use client::cli::{Cli, Commands, run_client};
 use config::get_daemon_endpoint;
 use daemon::server::run_daemon;
 
@@ -19,9 +19,7 @@ fn main() -> Result<()> {
     if let Some(Commands::Daemon) = cli.command {
         tracing::info!("starting daemon in foreground");
         let runtime = tokio::runtime::Runtime::new()?;
-        return runtime.block_on(async {
-            run_daemon().await
-        });
+        return runtime.block_on(async { run_daemon().await });
     }
 
     let runtime = tokio::runtime::Runtime::new()?;
@@ -93,7 +91,11 @@ fn start_daemon_background() -> Result<()> {
             .spawn()?;
     }
 
-    tracing::info!("daemon started in background, logs: {} / {}", log_path.display(), err_path.display());
+    tracing::info!(
+        "daemon started in background, logs: {} / {}",
+        log_path.display(),
+        err_path.display()
+    );
 
     Ok(())
 }

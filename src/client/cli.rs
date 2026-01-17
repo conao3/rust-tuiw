@@ -186,8 +186,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
                 "sessionId": session_id,
             });
 
-            let response =
-                send_graphql_request::<GetSessionStatusData>(query, variables).await?;
+            let response = send_graphql_request::<GetSessionStatusData>(query, variables).await?;
             println!("Status: {}", response.get_session_status);
         }
         Commands::Close { session_id } => {

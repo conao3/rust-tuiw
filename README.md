@@ -116,4 +116,4 @@ See `Makefile` for available commands:
 
 ## License
 
-MIT
+Apache-2.0

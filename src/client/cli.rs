@@ -24,7 +24,7 @@ pub enum Commands {
     },
 }
 
-pub async fn run_client(cli: Cli) -> Result<()> {
+pub async fn run_client(_cli: Cli) -> Result<()> {
     tracing::info!("running client");
     Ok(())
 }

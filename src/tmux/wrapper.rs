@@ -7,19 +7,19 @@ impl TmuxWrapper {
         Self
     }
 
-    pub async fn create_session(&self, name: &str, command: &str, cwd: &str) -> Result<()> {
+    pub async fn create_session(&self, _name: &str, _command: &str, _cwd: &str) -> Result<()> {
         Ok(())
     }
 
-    pub async fn send_keys(&self, session: &str, keys: &str) -> Result<()> {
+    pub async fn send_keys(&self, _session: &str, _keys: &str) -> Result<()> {
         Ok(())
     }
 
-    pub async fn capture_pane(&self, session: &str) -> Result<String> {
+    pub async fn capture_pane(&self, _session: &str) -> Result<String> {
         Ok(String::new())
     }
 
-    pub async fn kill_session(&self, session: &str) -> Result<()> {
+    pub async fn kill_session(&self, _session: &str) -> Result<()> {
         Ok(())
     }
 }

@@ -58,10 +58,10 @@ impl SessionManager {
     pub async fn remove_session(&self, id: &SessionId) -> Result<Option<Session>> {
         let session = self.sessions.write().await.remove(id);
 
-        if let Some(ref sess) = session {
-            if self.tmux.session_exists(&sess.tmux_session).await? {
-                self.tmux.kill_session(&sess.tmux_session).await?;
-            }
+        if let Some(ref sess) = session
+            && self.tmux.session_exists(&sess.tmux_session).await?
+        {
+            self.tmux.kill_session(&sess.tmux_session).await?;
         }
 
         Ok(session)

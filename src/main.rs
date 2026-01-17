@@ -54,7 +54,7 @@ async fn is_daemon_running() -> bool {
         .build()
         .unwrap();
 
-    match client.get(&format!("{}/health", endpoint)).send().await {
+    match client.get(format!("{}/health", endpoint)).send().await {
         Ok(resp) => resp.status().is_success(),
         Err(_) => false,
     }

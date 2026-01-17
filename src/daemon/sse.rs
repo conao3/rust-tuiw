@@ -19,11 +19,11 @@ pub async fn screen_changes_handler(
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            if let Ok(output) = session_manager.get_output(&session_id).await {
-                if output != last_output {
-                    last_output = output.clone();
-                    yield Ok(Event::default().data(output));
-                }
+            if let Ok(output) = session_manager.get_output(&session_id).await
+                && output != last_output
+            {
+                last_output = output.clone();
+                yield Ok(Event::default().data(output));
             }
         }
     };

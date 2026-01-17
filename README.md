@@ -1,6 +1,8 @@
-# rust-tuiw
+# tuiw
 
-![rust-tuiw](./.github/img/thumbnail.png)
+[![Crates.io](https://img.shields.io/crates/v/tuiw.svg)](https://crates.io/crates/tuiw)
+[![Documentation](https://docs.rs/tuiw/badge.svg)](https://docs.rs/tuiw)
+[![License](https://img.shields.io/crates/l/tuiw.svg)](https://github.com/conao3/rust-tuiw/blob/master/LICENSE)
 
 TUI applications wrapper with tmux for headless operation.
 
@@ -122,7 +124,13 @@ cd rust-tuiw
 cargo build --release
 ```
 
-The binary will be available at `target/release/rust-tuiw`.
+The binary will be available at `target/release/tuiw`.
+
+Alternatively, install via cargo:
+
+```bash
+cargo install tuiw
+```
 
 ### Basic Usage
 
@@ -131,7 +139,7 @@ The binary will be available at `target/release/rust-tuiw`.
 Create a new TUI session by specifying the command to run:
 
 ```bash
-rust-tuiw create "bash"
+tuiw create "bash"
 ```
 
 This will output a session ID (UUID format):
@@ -142,7 +150,7 @@ Session created: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 You can also specify a working directory:
 
 ```bash
-rust-tuiw create "vim" --cwd /path/to/project
+tuiw create "vim" --cwd /path/to/project
 ```
 
 #### 2. List Sessions
@@ -150,7 +158,7 @@ rust-tuiw create "vim" --cwd /path/to/project
 View all active sessions:
 
 ```bash
-rust-tuiw list
+tuiw list
 ```
 
 Output:
@@ -164,8 +172,8 @@ Sessions:
 Send keyboard input to a session:
 
 ```bash
-rust-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "echo hello"
-rust-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
+tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "echo hello"
+tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
 ```
 
 #### 4. Get Output
@@ -173,7 +181,7 @@ rust-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
 Capture the current screen content:
 
 ```bash
-rust-tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
 ```
 
 #### 5. Check Status
@@ -181,7 +189,7 @@ rust-tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
 Check if a session is running:
 
 ```bash
-rust-tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
 ```
 
 #### 6. Close Session
@@ -189,30 +197,30 @@ rust-tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
 Terminate a session:
 
 ```bash
-rust-tuiw close a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw close a1b2c3d4-e5f6-7890-abcd-ef1234567890
 ```
 
 ### Example: Automating vim
 
 ```bash
 # Create a vim session
-SESSION_ID=$(rust-tuiw create "vim" | grep -oE '[0-9a-f-]{36}')
+SESSION_ID=$(tuiw create "vim" | grep -oE '[0-9a-f-]{36}')
 
 # Open a file
-rust-tuiw send $SESSION_ID ":e test.txt"
-rust-tuiw send $SESSION_ID "Enter"
+tuiw send $SESSION_ID ":e test.txt"
+tuiw send $SESSION_ID "Enter"
 
 # Enter insert mode and type
-rust-tuiw send $SESSION_ID "i"
-rust-tuiw send $SESSION_ID "Hello, World!"
+tuiw send $SESSION_ID "i"
+tuiw send $SESSION_ID "Hello, World!"
 
 # Save and quit
-rust-tuiw send $SESSION_ID "Escape"
-rust-tuiw send $SESSION_ID ":wq"
-rust-tuiw send $SESSION_ID "Enter"
+tuiw send $SESSION_ID "Escape"
+tuiw send $SESSION_ID ":wq"
+tuiw send $SESSION_ID "Enter"
 
 # Close session
-rust-tuiw close $SESSION_ID
+tuiw close $SESSION_ID
 ```
 
 ### SSE for Real-time Monitoring

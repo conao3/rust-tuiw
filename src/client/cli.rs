@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
-#[command(name = "rust-tuiw")]
+#[command(name = "tuiw")]
 #[command(about = "TUI applications wrapper with tmux for headless operation")]
 pub struct Cli {
     #[command(subcommand)]

@@ -4,11 +4,20 @@ use uuid::Uuid;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
-pub struct SessionId(pub Uuid);
+pub struct SessionId(pub String);
 
 impl SessionId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        let uuid = Uuid::new_v4();
+        let short_id = uuid.to_string().chars().take(8).collect();
+        Self(short_id)
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+        if s.len() != 8 || !s.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err("session ID must be 8 hexadecimal characters");
+        }
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -18,11 +27,17 @@ impl Default for SessionId {
     }
 }
 
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 async_graphql::scalar!(SessionId);
 
 impl From<SessionId> for async_graphql::Value {
     fn from(id: SessionId) -> Self {
-        async_graphql::Value::String(id.0.to_string())
+        async_graphql::Value::String(id.0)
     }
 }
 
@@ -31,10 +46,7 @@ impl TryFrom<async_graphql::Value> for SessionId {
 
     fn try_from(value: async_graphql::Value) -> Result<Self, Self::Error> {
         match value {
-            async_graphql::Value::String(s) => {
-                let uuid = Uuid::parse_str(&s).map_err(|_| "invalid UUID")?;
-                Ok(SessionId(uuid))
-            }
+            async_graphql::Value::String(s) => SessionId::from_str(&s),
             _ => Err("expected string"),
         }
     }

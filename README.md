@@ -77,7 +77,7 @@ On first invocation, if no daemon is running, the process automatically starts a
 ### Session Management
 
 Each session maintains:
-- Unique session ID
+- Unique session ID (8 character hex string derived from UUID)
 - Working directory (cwd) from client invocation location
 - Tmux session reference
 - Output buffer and change detection state
@@ -144,9 +144,9 @@ Create a new TUI session by specifying the command to run:
 tuiw create "bash"
 ```
 
-This will output a session ID (UUID format):
+This will output a session ID (8 character hex format):
 ```
-Session created: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+Session created: 2a638ef5
 ```
 
 You can also specify a working directory:
@@ -166,7 +166,7 @@ tuiw list
 Output:
 ```
 Sessions:
-  a1b2c3d4-e5f6-7890-abcd-ef1234567890 - bash (/home/user)
+  2a638ef5 - bash (/home/user)
 ```
 
 #### 3. Send Keys
@@ -174,8 +174,8 @@ Sessions:
 Send keyboard input to a session:
 
 ```bash
-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "echo hello"
-tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
+tuiw send 2a638ef5 "echo hello"
+tuiw send 2a638ef5 "Enter"
 ```
 
 #### 4. Get Output
@@ -183,7 +183,7 @@ tuiw send a1b2c3d4-e5f6-7890-abcd-ef1234567890 "Enter"
 Capture the current screen content:
 
 ```bash
-tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw output 2a638ef5
 ```
 
 #### 5. Check Status
@@ -191,7 +191,7 @@ tuiw output a1b2c3d4-e5f6-7890-abcd-ef1234567890
 Check if a session is running:
 
 ```bash
-tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw status 2a638ef5
 ```
 
 #### 6. Close Session
@@ -199,14 +199,14 @@ tuiw status a1b2c3d4-e5f6-7890-abcd-ef1234567890
 Terminate a session:
 
 ```bash
-tuiw close a1b2c3d4-e5f6-7890-abcd-ef1234567890
+tuiw close 2a638ef5
 ```
 
 ### Example: Automating vim
 
 ```bash
 # Create a vim session
-SESSION_ID=$(tuiw create "vim" | grep -oE '[0-9a-f-]{36}')
+SESSION_ID=$(tuiw create "vim" | grep -oE '[0-9a-f]{8}')
 
 # Open a file
 tuiw send $SESSION_ID ":e test.txt"
@@ -230,7 +230,7 @@ tuiw close $SESSION_ID
 Subscribe to screen changes via Server-Sent Events:
 
 ```bash
-curl -N http://127.0.0.1:50051/sse/<session-id>
+curl -N http://127.0.0.1:50051/sse/2a638ef5
 ```
 
 This streams output whenever the screen content changes.
@@ -255,10 +255,10 @@ curl -X POST http://127.0.0.1:50051/graphql \
 
 **Session not found:**
 - The daemon is stateless and sessions are lost on restart
-- Verify the session ID is correct using `rust-tuiw list`
+- Verify the session ID is correct using `tuiw list`
 
 **Keys not being sent:**
-- Ensure the session is still running with `rust-tuiw status`
+- Ensure the session is still running with `tuiw status`
 - Special keys like Enter, Escape, Tab should be sent as separate commands
 
 ## Development

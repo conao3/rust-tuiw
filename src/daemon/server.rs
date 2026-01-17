@@ -62,9 +62,7 @@ async fn sse_handler(
     State(state): State<AppState>,
     Path(session_id_str): Path<String>,
 ) -> Result<impl axum::response::IntoResponse, String> {
-    let uuid =
-        uuid::Uuid::parse_str(&session_id_str).map_err(|_| "invalid session ID".to_string())?;
-    let session_id = SessionId(uuid);
+    let session_id = SessionId::from_str(&session_id_str).map_err(|e| e.to_string())?;
 
     Ok(screen_changes_handler(State(state.session_manager), Extension(session_id)).await)
 }

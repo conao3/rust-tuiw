@@ -39,3 +39,21 @@ watch:
 .PHONY: treefmt
 treefmt:
 	nix fmt
+
+.PHONY: ci
+ci:
+	cargo fmt --check
+	cargo clippy --all-targets --all-features -- -D warnings
+	cargo test --all-features
+
+.PHONY: integration
+integration:
+	cargo test --test '*' -- --ignored --test-threads=1
+
+.PHONY: coverage
+coverage:
+	cargo llvm-cov --all-features --lcov --output-path lcov.info
+
+.PHONY: release-check
+release-check:
+	cargo publish --dry-run

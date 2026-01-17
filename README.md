@@ -1,5 +1,7 @@
 # rust-tuiw
 
+![rust-tuiw](./.github/img/thumbnail.svg)
+
 TUI applications wrapper with tmux for headless operation.
 
 ## Overview

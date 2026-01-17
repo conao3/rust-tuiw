@@ -1,5 +1,6 @@
 use async_graphql::Object;
 
+#[allow(dead_code)]
 pub struct Mutation;
 
 #[Object]

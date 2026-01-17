@@ -20,6 +20,8 @@ jobs:
     name: Version Bump
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
     steps:

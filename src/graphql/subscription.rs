@@ -4,7 +4,6 @@ use async_graphql::futures_util::stream::Stream;
 use async_graphql::{Context, Result, Subscription};
 use std::time::Duration;
 
-#[allow(dead_code)]
 pub struct Subscriptions;
 
 #[Subscription]

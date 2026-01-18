@@ -2,7 +2,6 @@ use crate::daemon::session::SessionManager;
 use crate::types::{Session, SessionId, SessionStatus};
 use async_graphql::{Context, Object, Result};
 
-#[allow(dead_code)]
 pub struct Query;
 
 #[Object]

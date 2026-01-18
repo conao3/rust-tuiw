@@ -2,7 +2,6 @@ use async_graphql::{Enum, InputObject, SimpleObject};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct SessionId(pub String);
 
@@ -52,7 +51,6 @@ impl TryFrom<async_graphql::Value> for SessionId {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Session {
     pub id: SessionId,
@@ -61,7 +59,6 @@ pub struct Session {
     pub tmux_session: String,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, Enum, Copy, Eq, PartialEq)]
 pub enum SessionStatus {
     Running,

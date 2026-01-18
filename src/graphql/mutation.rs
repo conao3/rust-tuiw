@@ -2,7 +2,6 @@ use crate::daemon::session::SessionManager;
 use crate::types::{CreateSessionInput, SendKeysInput, SessionId};
 use async_graphql::{Context, Object, Result};
 
-#[allow(dead_code)]
 pub struct Mutation;
 
 #[Object]

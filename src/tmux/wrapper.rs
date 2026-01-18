@@ -1,16 +1,13 @@
 use anyhow::{Context, Result};
 use tokio::process::Command;
 
-#[allow(dead_code)]
 pub struct TmuxWrapper;
 
 impl TmuxWrapper {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Self
     }
 
-    #[allow(dead_code)]
     pub async fn create_session(&self, name: &str, command: &str, cwd: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["new-session", "-d", "-s", name, "-c", cwd, command])
@@ -26,7 +23,6 @@ impl TmuxWrapper {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn send_keys(&self, session: &str, keys: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["send-keys", "-t", session, keys])
@@ -42,7 +38,6 @@ impl TmuxWrapper {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn capture_pane(&self, session: &str) -> Result<String> {
         let output = Command::new("tmux")
             .args(["capture-pane", "-t", session, "-p"])
@@ -61,7 +56,6 @@ impl TmuxWrapper {
         Ok(stdout)
     }
 
-    #[allow(dead_code)]
     pub async fn kill_session(&self, session: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["kill-session", "-t", session])
@@ -77,7 +71,6 @@ impl TmuxWrapper {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn session_exists(&self, session: &str) -> Result<bool> {
         let output = Command::new("tmux")
             .args(["has-session", "-t", session])

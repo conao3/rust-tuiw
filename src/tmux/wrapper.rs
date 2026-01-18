@@ -1,9 +1,14 @@
 use anyhow::{Context, Result};
 use tokio::process::Command;
 
-pub async fn create_session(name: &str, command: &str, cwd: &str) -> Result<()> {
+fn to_tmux_session_name(session_id: &str) -> String {
+    format!("tuiw-{}", session_id)
+}
+
+pub async fn create_session(session_id: &str, command: &str, cwd: &str) -> Result<()> {
+    let name = to_tmux_session_name(session_id);
     let output = Command::new("tmux")
-        .args(["new-session", "-d", "-s", name, "-c", cwd, command])
+        .args(["new-session", "-d", "-s", &name, "-c", cwd, command])
         .output()
         .await
         .context("failed to execute tmux new-session")?;
@@ -16,9 +21,10 @@ pub async fn create_session(name: &str, command: &str, cwd: &str) -> Result<()> 
     Ok(())
 }
 
-pub async fn send_keys(session: &str, keys: &str) -> Result<()> {
+pub async fn send_keys(session_id: &str, keys: &str) -> Result<()> {
+    let session = to_tmux_session_name(session_id);
     let output = Command::new("tmux")
-        .args(["send-keys", "-t", session, keys])
+        .args(["send-keys", "-t", &session, keys])
         .output()
         .await
         .context("failed to execute tmux send-keys")?;
@@ -31,8 +37,9 @@ pub async fn send_keys(session: &str, keys: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn capture_pane_with_color(session: &str, with_color: bool) -> Result<String> {
-    let mut args = vec!["capture-pane", "-t", session, "-p"];
+pub async fn capture_pane_with_color(session_id: &str, with_color: bool) -> Result<String> {
+    let session = to_tmux_session_name(session_id);
+    let mut args = vec!["capture-pane", "-t", &session, "-p"];
     if with_color {
         args.push("-e");
     }
@@ -54,9 +61,10 @@ pub async fn capture_pane_with_color(session: &str, with_color: bool) -> Result<
     Ok(stdout)
 }
 
-pub async fn kill_session(session: &str) -> Result<()> {
+pub async fn kill_session(session_id: &str) -> Result<()> {
+    let session = to_tmux_session_name(session_id);
     let output = Command::new("tmux")
-        .args(["kill-session", "-t", session])
+        .args(["kill-session", "-t", &session])
         .output()
         .await
         .context("failed to execute tmux kill-session")?;
@@ -69,9 +77,10 @@ pub async fn kill_session(session: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn session_exists(session: &str) -> Result<bool> {
+pub async fn session_exists(session_id: &str) -> Result<bool> {
+    let session = to_tmux_session_name(session_id);
     let output = Command::new("tmux")
-        .args(["has-session", "-t", session])
+        .args(["has-session", "-t", &session])
         .output()
         .await
         .context("failed to execute tmux has-session")?;
@@ -97,5 +106,11 @@ pub async fn list_sessions() -> Result<Vec<String>> {
     let stdout = String::from_utf8(output.stdout)
         .context("failed to parse tmux list-sessions output as UTF-8")?;
 
-    Ok(stdout.lines().map(|s| s.to_string()).collect())
+    let session_ids: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("tuiw-"))
+        .map(|s| s.to_string())
+        .collect();
+
+    Ok(session_ids)
 }

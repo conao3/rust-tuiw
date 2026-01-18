@@ -1,4 +1,5 @@
 mod client;
+mod store;
 mod tmux;
 mod types;
 

@@ -72,10 +72,10 @@ View all active tuiw sessions:
 tuiw list
 ```
 
-Output (one session ID per line):
+Output (tab-separated: ID, command, working directory):
 ```
-2a638ef5
-f3b91a2c
+2a638ef5	bash	/home/user
+f3b91a2c	vim	/path/to/project
 ```
 
 #### 3. Send Keys
@@ -198,6 +198,8 @@ tuiw is a simple CLI wrapper around tmux. Each tuiw session corresponds to a tmu
 
 - Session IDs are 8-character hexadecimal strings (derived from UUID)
 - tmux session names follow the pattern `tuiw-{session_id}`
+- Session metadata (command, cwd) is stored in `~/.config/tuiw/session.json`
+- Stale sessions (where tmux session no longer exists) are automatically cleaned up when running `create` or `list` commands
 - Sessions persist until explicitly closed or tmux server is stopped
 - Multiple TUI applications can run simultaneously in separate sessions
 

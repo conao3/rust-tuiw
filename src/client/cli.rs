@@ -1,3 +1,4 @@
+use crate::store;
 use crate::tmux::wrapper;
 use crate::types::SessionId;
 use anyhow::Result;
@@ -45,9 +46,10 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             let cwd_str = cwd.to_string_lossy().to_string();
 
             let session_id = SessionId::new();
-            let tmux_session = format!("tuiw-{}", session_id.0);
 
-            wrapper::create_session(&tmux_session, &command, &cwd_str).await?;
+            wrapper::create_session(&session_id.0, &command, &cwd_str).await?;
+            store::add_session(session_id.0.clone(), command, cwd_str)?;
+            store::cleanup_stale_sessions().await?;
             println!("{}", session_id.0);
         }
         Commands::Send {
@@ -55,18 +57,23 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             keys,
             no_newline,
         } => {
-            let tmux_session = format!("tuiw-{}", session_id);
-            wrapper::send_keys(&tmux_session, &keys).await?;
+            wrapper::send_keys(&session_id, &keys).await?;
 
             if !no_newline {
-                wrapper::send_keys(&tmux_session, "Enter").await?;
+                wrapper::send_keys(&session_id, "Enter").await?;
             }
         }
         Commands::List => {
-            let sessions = wrapper::list_sessions().await?;
-            for session in sessions {
-                if let Some(id) = session.strip_prefix("tuiw-") {
-                    println!("{}", id);
+            let session_ids = wrapper::list_sessions().await?;
+            let session_store = store::load_store()?;
+            for session_id in session_ids {
+                match session_store.sessions.get(&session_id) {
+                    Some(info) => {
+                        println!("{}\t{}\t{}", session_id, info.command, info.cwd);
+                    }
+                    None => {
+                        println!("{}\t\t", session_id);
+                    }
                 }
             }
         }
@@ -74,13 +81,11 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             session_id,
             no_color,
         } => {
-            let tmux_session = format!("tuiw-{}", session_id);
-            let output = wrapper::capture_pane_with_color(&tmux_session, !no_color).await?;
+            let output = wrapper::capture_pane_with_color(&session_id, !no_color).await?;
             print!("{}", output);
         }
         Commands::Status { session_id } => {
-            let tmux_session = format!("tuiw-{}", session_id);
-            let exists = wrapper::session_exists(&tmux_session).await?;
+            let exists = wrapper::session_exists(&session_id).await?;
             if exists {
                 println!("Running");
             } else {
@@ -88,12 +93,12 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             }
         }
         Commands::Close { session_id } => {
-            let tmux_session = format!("tuiw-{}", session_id);
-            let exists = wrapper::session_exists(&tmux_session).await?;
+            let exists = wrapper::session_exists(&session_id).await?;
             if !exists {
                 anyhow::bail!("Session not found");
             }
-            wrapper::kill_session(&tmux_session).await?;
+            wrapper::kill_session(&session_id).await?;
+            store::cleanup_stale_sessions().await?;
         }
     }
 

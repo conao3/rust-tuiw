@@ -122,14 +122,13 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             }
 
             #[derive(Deserialize)]
-            struct ListSessionsData {
-                #[serde(rename = "listSessions")]
-                list_sessions: Vec<Session>,
+            struct SessionsData {
+                sessions: Vec<Session>,
             }
 
             let query = r#"
-                query ListSessions {
-                    listSessions {
+                query Sessions {
+                    sessions {
                         id
                         command
                         cwd
@@ -138,27 +137,27 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             "#;
 
             let response =
-                send_graphql_request::<ListSessionsData>(query, serde_json::json!({})).await?;
+                send_graphql_request::<SessionsData>(query, serde_json::json!({})).await?;
 
-            if response.list_sessions.is_empty() {
+            if response.sessions.is_empty() {
                 println!("No sessions");
             } else {
                 println!("Sessions:");
-                for session in response.list_sessions {
+                for session in response.sessions {
                     println!("  {} - {} ({})", session.id, session.command, session.cwd);
                 }
             }
         }
         Commands::Capture { session_id } => {
             #[derive(Deserialize)]
-            struct GetOutputData {
-                #[serde(rename = "getOutput")]
-                get_output: String,
+            struct SessionCaptureData {
+                #[serde(rename = "sessionCapture")]
+                session_capture: String,
             }
 
             let query = r#"
-                query GetOutput($sessionId: SessionId!) {
-                    getOutput(sessionId: $sessionId)
+                query SessionCapture($sessionId: SessionId!) {
+                    sessionCapture(sessionId: $sessionId)
                 }
             "#;
 
@@ -166,19 +165,19 @@ pub async fn run_client(cli: Cli) -> Result<()> {
                 "sessionId": session_id,
             });
 
-            let response = send_graphql_request::<GetOutputData>(query, variables).await?;
-            println!("{}", response.get_output);
+            let response = send_graphql_request::<SessionCaptureData>(query, variables).await?;
+            println!("{}", response.session_capture);
         }
         Commands::Status { session_id } => {
             #[derive(Deserialize)]
-            struct GetSessionStatusData {
-                #[serde(rename = "getSessionStatus")]
-                get_session_status: String,
+            struct SessionStatusData {
+                #[serde(rename = "sessionStatus")]
+                session_status: String,
             }
 
             let query = r#"
-                query GetSessionStatus($sessionId: SessionId!) {
-                    getSessionStatus(sessionId: $sessionId)
+                query SessionStatus($sessionId: SessionId!) {
+                    sessionStatus(sessionId: $sessionId)
                 }
             "#;
 
@@ -186,8 +185,8 @@ pub async fn run_client(cli: Cli) -> Result<()> {
                 "sessionId": session_id,
             });
 
-            let response = send_graphql_request::<GetSessionStatusData>(query, variables).await?;
-            println!("Status: {}", response.get_session_status);
+            let response = send_graphql_request::<SessionStatusData>(query, variables).await?;
+            println!("Status: {}", response.session_status);
         }
         Commands::Close { session_id } => {
             #[derive(Deserialize)]

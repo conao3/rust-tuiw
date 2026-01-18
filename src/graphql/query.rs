@@ -7,18 +7,18 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn list_sessions(&self, ctx: &Context<'_>) -> Result<Vec<Session>> {
+    async fn sessions(&self, ctx: &Context<'_>) -> Result<Vec<Session>> {
         let session_manager = ctx.data::<SessionManager>()?;
         Ok(session_manager.list_sessions().await)
     }
 
-    async fn get_output(&self, ctx: &Context<'_>, session_id: SessionId) -> Result<String> {
+    async fn session_capture(&self, ctx: &Context<'_>, session_id: SessionId) -> Result<String> {
         let session_manager = ctx.data::<SessionManager>()?;
         let output = session_manager.get_output(&session_id).await?;
         Ok(output)
     }
 
-    async fn get_session_status(
+    async fn session_status(
         &self,
         ctx: &Context<'_>,
         session_id: SessionId,

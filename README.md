@@ -243,9 +243,9 @@ You must start the daemon manually with `tuiw daemon` before using client comman
 - `closeSession(sessionId: SessionID!): Boolean`
 
 #### Queries
-- `listSessions: [Session!]!`
-- `getOutput(sessionId: SessionID!): String!`
-- `getSessionStatus(sessionId: SessionID!): SessionStatus!`
+- `sessions: [Session!]!`
+- `sessionCapture(sessionId: SessionID!): String!`
+- `sessionStatus(sessionId: SessionID!): SessionStatus!`
 
 #### Subscriptions
 - `screenChanges(sessionId: SessionID!): String!` (via SSE)

@@ -101,12 +101,12 @@ tuiw send 2a638ef5 "echo hello"
 tuiw send 2a638ef5 "Enter"
 ```
 
-#### 4. Get Output
+#### 4. Capture Screen
 
 Capture the current screen content:
 
 ```bash
-tuiw output 2a638ef5
+tuiw capture 2a638ef5
 ```
 
 #### 5. Check Status

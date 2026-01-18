@@ -93,11 +93,17 @@ Output (tab-separated):
 
 #### 3. Send Keys
 
-Send keyboard input to a session:
+Send keyboard input to a session. By default, Enter is sent after the keys:
 
 ```bash
 tuiw send 2a638ef5 "echo hello"
-tuiw send 2a638ef5 "Enter"
+```
+
+To send keys without Enter, use the `-n` flag:
+
+```bash
+tuiw send -n 2a638ef5 "i"
+tuiw send -n 2a638ef5 "Escape"
 ```
 
 #### 4. View Screen
@@ -132,16 +138,14 @@ SESSION_ID=$(tuiw create "vim")
 
 # Open a file
 tuiw send $SESSION_ID ":e test.txt"
-tuiw send $SESSION_ID "Enter"
 
 # Enter insert mode and type
-tuiw send $SESSION_ID "i"
+tuiw send -n $SESSION_ID "i"
 tuiw send $SESSION_ID "Hello, World!"
 
 # Save and quit
-tuiw send $SESSION_ID "Escape"
+tuiw send -n $SESSION_ID "Escape"
 tuiw send $SESSION_ID ":wq"
-tuiw send $SESSION_ID "Enter"
 
 # Close session
 tuiw close $SESSION_ID
@@ -185,7 +189,8 @@ curl -X POST http://127.0.0.1:50051/graphql \
 
 **Keys not being sent:**
 - Ensure the session is still running with `tuiw status`
-- Special keys like Enter, Escape, Tab should be sent as separate commands
+- By default, Enter is sent after each command. Use `-n` to suppress it
+- Special keys like Escape should be sent with `-n` flag
 
 ## Architecture
 

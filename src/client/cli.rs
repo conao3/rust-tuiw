@@ -22,6 +22,8 @@ pub enum Commands {
     Send {
         session_id: String,
         keys: String,
+        #[arg(short = 'n', long)]
+        no_newline: bool,
     },
     List,
     View {
@@ -90,7 +92,11 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             let response = send_graphql_request::<CreateSessionData>(query, variables).await?;
             println!("{}", response.create_session);
         }
-        Commands::Send { session_id, keys } => {
+        Commands::Send {
+            session_id,
+            keys,
+            no_newline,
+        } => {
             #[derive(Deserialize)]
             struct SendKeysData {
                 #[serde(rename = "sendKeys")]
@@ -111,6 +117,16 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             });
 
             send_graphql_request::<SendKeysData>(query, variables).await?;
+
+            if !no_newline {
+                let variables = serde_json::json!({
+                    "input": {
+                        "sessionId": session_id,
+                        "keys": "Enter",
+                    }
+                });
+                send_graphql_request::<SendKeysData>(query, variables).await?;
+            }
         }
         Commands::List => {
             #[derive(Deserialize)]

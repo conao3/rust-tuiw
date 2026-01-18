@@ -1,4 +1,4 @@
-use crate::tmux::wrapper::TmuxWrapper;
+use crate::tmux::wrapper;
 use crate::types::{Session, SessionId, SessionStatus};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -8,14 +8,12 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<SessionId, Session>>>,
-    tmux: Arc<TmuxWrapper>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
-            tmux: Arc::new(TmuxWrapper::new()),
         }
     }
 
@@ -23,9 +21,7 @@ impl SessionManager {
         let session_id = SessionId::new();
         let tmux_session = format!("tuiw-{}", session_id.0);
 
-        self.tmux
-            .create_session(&tmux_session, &command, &cwd)
-            .await?;
+        wrapper::create_session(&tmux_session, &command, &cwd).await?;
 
         let session = Session {
             id: session_id.clone(),
@@ -54,9 +50,9 @@ impl SessionManager {
         let session = self.sessions.write().await.remove(id);
 
         if let Some(ref sess) = session
-            && self.tmux.session_exists(&sess.tmux_session).await?
+            && wrapper::session_exists(&sess.tmux_session).await?
         {
-            self.tmux.kill_session(&sess.tmux_session).await?;
+            wrapper::kill_session(&sess.tmux_session).await?;
         }
 
         Ok(session)
@@ -71,7 +67,7 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("session not found"))?;
 
-        self.tmux.send_keys(&session.tmux_session, &keys).await?;
+        wrapper::send_keys(&session.tmux_session, &keys).await?;
         Ok(())
     }
 
@@ -84,7 +80,7 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("session not found"))?;
 
-        let output = self.tmux.capture_pane(&session.tmux_session).await?;
+        let output = wrapper::capture_pane(&session.tmux_session).await?;
         Ok(output)
     }
 
@@ -97,7 +93,7 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("session not found"))?;
 
-        let exists = self.tmux.session_exists(&session.tmux_session).await?;
+        let exists = wrapper::session_exists(&session.tmux_session).await?;
 
         if exists {
             Ok(SessionStatus::Running)

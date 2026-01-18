@@ -10,7 +10,7 @@ TUI applications wrapper with tmux for headless operation.
 
 ## Overview
 
-rust-tuiw enables headless interaction with TUI (Terminal User Interface) applications by wrapping them with tmux. This allows for programmatic control and automation of interactive terminal applications.
+rust-tuiw is a simple CLI wrapper around tmux that enables headless interaction with TUI (Terminal User Interface) applications. It provides an easy-to-use interface for programmatic control and automation of interactive terminal applications.
 
 ## Getting Started
 
@@ -45,20 +45,6 @@ cargo build --release
 
 ### Basic Usage
 
-#### 0. Start the Daemon
-
-First, start the daemon in the background:
-
-```bash
-tuiw daemon > /tmp/tuiw-daemon.log 2>&1 &
-```
-
-Or run it in the foreground for debugging:
-
-```bash
-tuiw daemon
-```
-
 #### 1. Create a Session
 
 Create a new TUI session by specifying the command to run:
@@ -80,15 +66,16 @@ tuiw create "vim" --cwd /path/to/project
 
 #### 2. List Sessions
 
-View all active sessions:
+View all active tuiw sessions:
 
 ```bash
 tuiw list
 ```
 
-Output (tab-separated):
+Output (one session ID per line):
 ```
-2a638ef5	bash	/home/user
+2a638ef5
+f3b91a2c
 ```
 
 #### 3. Send Keys
@@ -128,6 +115,8 @@ Check if a session is running:
 tuiw status 2a638ef5
 ```
 
+Output: `Running` or `Stopped`
+
 #### 6. Close Session
 
 Terminate a session:
@@ -157,118 +146,60 @@ tuiw send $SESSION_ID ":wq"
 tuiw close $SESSION_ID
 ```
 
-### SSE for Real-time Monitoring
-
-Subscribe to screen changes via Server-Sent Events:
-
-```bash
-curl -N http://127.0.0.1:50051/sse/2a638ef5
-```
-
-This streams output whenever the screen content changes.
-
-### GraphQL API
-
-The daemon exposes a GraphQL API at `http://127.0.0.1:50051/graphql`:
-
-```bash
-curl -X POST http://127.0.0.1:50051/graphql \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query { listSessions { id command cwd } }"
-  }'
-```
-
 ### Troubleshooting
 
-**Error: daemon is not running:**
-- Start the daemon with `tuiw daemon > /tmp/tuiw-daemon.log 2>&1 &`
-- Check if the daemon is running with `ps aux | grep "tuiw daemon"`
-
-**Daemon not starting:**
-- Check if port 50051 is available
-- Ensure tmux is installed and in PATH
-
 **Session not found:**
-- The daemon is stateless and sessions are lost on restart
 - Verify the session ID is correct using `tuiw list`
+- Check if the tmux session still exists with `tmux list-sessions`
 
 **Keys not being sent:**
 - Ensure the session is still running with `tuiw status`
 - By default, Enter is sent after each command. Use `-n` to suppress it
 - Special keys like Escape should be sent with `-n` flag
 
+**tmux not found:**
+- Ensure tmux is installed and in PATH
+- On NixOS, use `nix develop` or run with `steam-run tuiw`
+
 ## Architecture
 
-### Daemon/Client Model
+tuiw is a simple CLI wrapper around tmux. Each tuiw session corresponds to a tmux session with the name pattern `tuiw-{session_id}`.
 
-The application operates in two modes:
-- **Daemon**: GraphQL server that manages tmux sessions and TUI applications
-- **Client**: CLI interface that communicates with the daemon via GraphQL
-
-You must start the daemon manually with `tuiw daemon` before using client commands.
-
-### Components
+### How it works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        Client                           │
-│                     (GraphQL Client)                    │
-└──────────────────────┬──────────────────────────────────┘
-                       │ GraphQL over HTTP
-                       │ SSE for subscriptions
-┌──────────────────────▼──────────────────────────────────┐
-│                       Daemon                            │
-│                   (GraphQL Server)                      │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │          Session Management (in-memory)         │   │
-│  │  - Session ID generation                        │   │
-│  │  - CWD tracking                                 │   │
-│  │  - Multiple session support                     │   │
-│  └─────────────────────┬───────────────────────────┘   │
-│                        │                                │
-│  ┌─────────────────────▼───────────────────────────┐   │
-│  │           Tmux Wrapper                          │   │
-│  │  - Session creation                             │   │
-│  │  - Key input injection                          │   │
-│  │  - Output capture (capture-pane)                │   │
-│  │  - Change detection for SSE                     │   │
-│  └─────────────────────┬───────────────────────────┘   │
-└────────────────────────┼───────────────────────────────┘
-                         │
-                ┌────────▼────────┐
-                │  Tmux Sessions  │
-                │   ┌──────────┐  │
-                │   │   TUI    │  │
-                │   │   App    │  │
-                │   └──────────┘  │
-                └─────────────────┘
+┌─────────────────────────────────────┐
+│         tuiw CLI                    │
+│  (Command line interface)           │
+└──────────────┬──────────────────────┘
+               │
+               │ Direct tmux commands
+               │
+┌──────────────▼──────────────────────┐
+│        tmux Sessions                │
+│   ┌──────────────────────┐          │
+│   │  tuiw-2a638ef5       │          │
+│   │  ┌────────────────┐  │          │
+│   │  │   TUI App      │  │          │
+│   │  │   (e.g., vim)  │  │          │
+│   │  └────────────────┘  │          │
+│   └──────────────────────┘          │
+│   ┌──────────────────────┐          │
+│   │  tuiw-f3b91a2c       │          │
+│   │  ┌────────────────┐  │          │
+│   │  │   TUI App      │  │          │
+│   │  │   (e.g., bash) │  │          │
+│   │  └────────────────┘  │          │
+│   └──────────────────────┘          │
+└─────────────────────────────────────┘
 ```
-
-### GraphQL API
-
-#### Mutations
-- `createSession(command: String!, cwd: String!): SessionID`
-- `sendKeys(sessionId: SessionID!, keys: String!): Boolean`
-- `closeSession(sessionId: SessionID!): Boolean`
-
-#### Queries
-- `sessions: [Session!]!`
-- `sessionCapture(sessionId: SessionID!): String!`
-- `sessionStatus(sessionId: SessionID!): SessionStatus!`
-
-#### Subscriptions
-- `screenChanges(sessionId: SessionID!): String!` (via SSE)
 
 ### Session Management
 
-Each session maintains:
-- Unique session ID (8 character hex string derived from UUID)
-- Working directory (cwd) from client invocation location
-- Tmux session reference
-- Output buffer and change detection state
-
-Multiple TUI applications can run simultaneously, each in its own session.
+- Session IDs are 8-character hexadecimal strings (derived from UUID)
+- tmux session names follow the pattern `tuiw-{session_id}`
+- Sessions persist until explicitly closed or tmux server is stopped
+- Multiple TUI applications can run simultaneously in separate sessions
 
 ## Use Cases
 
@@ -290,9 +221,7 @@ Since rust-tuiw works with any TUI application, it enables automation for:
 ## Technology Stack
 
 - **Language**: Rust (edition 2024)
-- **Async Runtime**: tokio
-- **GraphQL**: async-graphql
-- **HTTP Server**: axum
+- **Async Runtime**: tokio (minimal features)
 - **CLI Parsing**: clap
 - **Process Management**: tmux
 

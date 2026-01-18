@@ -15,19 +15,11 @@ name = "tuiw"
 path = "src/main.rs"
 
 [dependencies]
-tokio = { version = "1.43", features = ["full"] }
-async-graphql = "7.0"
-async-graphql-axum = "7.0"
-async-graphql-parser = "7.0"
-axum = "0.8"
+tokio = { version = "1.43", features = ["process", "rt-multi-thread", "time"] }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 anyhow = "1.0"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-async-stream = "0.3"
-tokio-stream = "0.1"
-futures = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1.43", features = ["macros"] }

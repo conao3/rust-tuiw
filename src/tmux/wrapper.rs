@@ -78,3 +78,24 @@ pub async fn session_exists(session: &str) -> Result<bool> {
 
     Ok(output.status.success())
 }
+
+pub async fn list_sessions() -> Result<Vec<String>> {
+    let output = Command::new("tmux")
+        .args(["list-sessions", "-F", "#{session_name}"])
+        .output()
+        .await
+        .context("failed to execute tmux list-sessions")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("no server running") {
+            return Ok(Vec::new());
+        }
+        anyhow::bail!("tmux list-sessions failed: {}", stderr);
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .context("failed to parse tmux list-sessions output as UTF-8")?;
+
+    Ok(stdout.lines().map(|s| s.to_string()).collect())
+}

@@ -28,7 +28,7 @@ async fn test_tmux_session_lifecycle() {
 
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    let output = wrapper::capture_pane(session_name)
+    let output = wrapper::capture_pane_with_color(session_name, false)
         .await
         .expect("failed to capture pane");
 

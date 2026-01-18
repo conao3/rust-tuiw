@@ -1,20 +1,18 @@
-use crate::config::get_daemon_endpoint;
+use crate::tmux::wrapper;
+use crate::types::SessionId;
 use anyhow::Result;
-use async_graphql_parser::parse_query;
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "tuiw")]
 #[command(about = "TUI applications wrapper with tmux for headless operation")]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Commands,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    Daemon,
     Create {
         command: String,
         #[arg(short, long, default_value = ".")]
@@ -40,230 +38,64 @@ pub enum Commands {
     },
 }
 
-#[derive(Serialize)]
-struct GraphQLRequest {
-    query: String,
-    variables: serde_json::Value,
-}
-
-#[derive(Deserialize)]
-struct GraphQLResponse<T> {
-    data: Option<T>,
-    errors: Option<Vec<GraphQLError>>,
-}
-
-#[derive(Deserialize)]
-struct GraphQLError {
-    message: String,
-}
-
 pub async fn run_client(cli: Cli) -> Result<()> {
-    tracing::info!("running client");
-
-    let command = cli.command.unwrap_or_else(|| {
-        eprintln!("No command provided. Use --help for usage information.");
-        std::process::exit(1);
-    });
-
-    match command {
-        Commands::Daemon => {
-            unreachable!("daemon command should be handled in main");
-        }
+    match cli.command {
         Commands::Create { command, cwd } => {
             let cwd = std::env::current_dir()?.join(&cwd).canonicalize()?;
             let cwd_str = cwd.to_string_lossy().to_string();
 
-            #[derive(Deserialize)]
-            struct CreateSessionData {
-                #[serde(rename = "createSession")]
-                create_session: String,
-            }
+            let session_id = SessionId::new();
+            let tmux_session = format!("tuiw-{}", session_id.0);
 
-            let query = r#"
-                mutation CreateSession($input: CreateSessionInput!) {
-                    createSession(input: $input)
-                }
-            "#;
-
-            let variables = serde_json::json!({
-                "input": {
-                    "command": command,
-                    "cwd": cwd_str,
-                }
-            });
-
-            let response = send_graphql_request::<CreateSessionData>(query, variables).await?;
-            println!("{}", response.create_session);
+            wrapper::create_session(&tmux_session, &command, &cwd_str).await?;
+            println!("{}", session_id.0);
         }
         Commands::Send {
             session_id,
             keys,
             no_newline,
         } => {
-            #[derive(Deserialize)]
-            struct SendKeysData {
-                #[serde(rename = "sendKeys")]
-                _send_keys: bool,
-            }
-
-            let query = r#"
-                mutation SendKeys($input: SendKeysInput!) {
-                    sendKeys(input: $input)
-                }
-            "#;
-
-            let variables = serde_json::json!({
-                "input": {
-                    "sessionId": session_id,
-                    "keys": keys,
-                }
-            });
-
-            send_graphql_request::<SendKeysData>(query, variables).await?;
+            let tmux_session = format!("tuiw-{}", session_id);
+            wrapper::send_keys(&tmux_session, &keys).await?;
 
             if !no_newline {
-                let variables = serde_json::json!({
-                    "input": {
-                        "sessionId": session_id,
-                        "keys": "Enter",
-                    }
-                });
-                send_graphql_request::<SendKeysData>(query, variables).await?;
+                wrapper::send_keys(&tmux_session, "Enter").await?;
             }
         }
         Commands::List => {
-            #[derive(Deserialize)]
-            struct Session {
-                id: String,
-                command: String,
-                cwd: String,
-            }
-
-            #[derive(Deserialize)]
-            struct SessionsData {
-                sessions: Vec<Session>,
-            }
-
-            let query = r#"
-                query Sessions {
-                    sessions {
-                        id
-                        command
-                        cwd
-                    }
+            let sessions = wrapper::list_sessions().await?;
+            for session in sessions {
+                if let Some(id) = session.strip_prefix("tuiw-") {
+                    println!("{}", id);
                 }
-            "#;
-
-            let response =
-                send_graphql_request::<SessionsData>(query, serde_json::json!({})).await?;
-
-            for session in response.sessions {
-                println!("{}\t{}\t{}", session.id, session.command, session.cwd);
             }
         }
-        Commands::View { session_id, no_color } => {
-            #[derive(Deserialize)]
-            struct SessionCaptureData {
-                #[serde(rename = "sessionCapture")]
-                session_capture: String,
-            }
-
-            let query = r#"
-                query SessionCapture($sessionId: SessionId!, $withColor: Boolean!) {
-                    sessionCapture(sessionId: $sessionId, withColor: $withColor)
-                }
-            "#;
-
-            let variables = serde_json::json!({
-                "sessionId": session_id,
-                "withColor": !no_color,
-            });
-
-            let response = send_graphql_request::<SessionCaptureData>(query, variables).await?;
-            println!("{}", response.session_capture);
+        Commands::View {
+            session_id,
+            no_color,
+        } => {
+            let tmux_session = format!("tuiw-{}", session_id);
+            let output = wrapper::capture_pane_with_color(&tmux_session, !no_color).await?;
+            print!("{}", output);
         }
         Commands::Status { session_id } => {
-            #[derive(Deserialize)]
-            struct SessionStatusData {
-                #[serde(rename = "sessionStatus")]
-                session_status: String,
+            let tmux_session = format!("tuiw-{}", session_id);
+            let exists = wrapper::session_exists(&tmux_session).await?;
+            if exists {
+                println!("Running");
+            } else {
+                println!("Stopped");
             }
-
-            let query = r#"
-                query SessionStatus($sessionId: SessionId!) {
-                    sessionStatus(sessionId: $sessionId)
-                }
-            "#;
-
-            let variables = serde_json::json!({
-                "sessionId": session_id,
-            });
-
-            let response = send_graphql_request::<SessionStatusData>(query, variables).await?;
-            println!("{}", response.session_status);
         }
         Commands::Close { session_id } => {
-            #[derive(Deserialize)]
-            struct CloseSessionData {
-                #[serde(rename = "closeSession")]
-                close_session: bool,
-            }
-
-            let query = r#"
-                mutation CloseSession($sessionId: SessionId!) {
-                    closeSession(sessionId: $sessionId)
-                }
-            "#;
-
-            let variables = serde_json::json!({
-                "sessionId": session_id,
-            });
-
-            let response = send_graphql_request::<CloseSessionData>(query, variables).await?;
-            if !response.close_session {
+            let tmux_session = format!("tuiw-{}", session_id);
+            let exists = wrapper::session_exists(&tmux_session).await?;
+            if !exists {
                 anyhow::bail!("Session not found");
             }
+            wrapper::kill_session(&tmux_session).await?;
         }
     }
 
     Ok(())
-}
-
-fn extract_query_name(query: &str) -> Option<String> {
-    let doc = parse_query(query).ok()?;
-    doc.operations
-        .iter()
-        .find_map(|(name, _operation)| name.as_ref().map(|n| n.to_string()))
-}
-
-async fn send_graphql_request<T: for<'de> Deserialize<'de>>(
-    query: &str,
-    variables: serde_json::Value,
-) -> Result<T> {
-    let endpoint = get_daemon_endpoint();
-    let client = reqwest::Client::new();
-
-    let request = GraphQLRequest {
-        query: query.to_string(),
-        variables,
-    };
-
-    let query_name = extract_query_name(query).unwrap_or_else(|| "Anonymous".to_string());
-    tracing::info!("query: {}, variables: {}", query_name, request.variables);
-    let response = client
-        .post(format!("{}/graphql", endpoint))
-        .json(&request)
-        .send()
-        .await?;
-
-    let graphql_response: GraphQLResponse<T> = response.json().await?;
-
-    if let Some(errors) = graphql_response.errors {
-        let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
-        anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
-    }
-
-    graphql_response
-        .data
-        .ok_or_else(|| anyhow::anyhow!("No data in response"))
 }

@@ -56,7 +56,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
     tracing::info!("running client");
 
     let command = cli.command.unwrap_or_else(|| {
-        println!("No command provided. Use --help for usage information.");
+        eprintln!("No command provided. Use --help for usage information.");
         std::process::exit(1);
     });
 
@@ -88,7 +88,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             });
 
             let response = send_graphql_request::<CreateSessionData>(query, variables).await?;
-            println!("Session created: {}", response.create_session);
+            println!("{}", response.create_session);
         }
         Commands::Send { session_id, keys } => {
             #[derive(Deserialize)]
@@ -111,7 +111,6 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             });
 
             send_graphql_request::<SendKeysData>(query, variables).await?;
-            println!("Keys sent successfully");
         }
         Commands::List => {
             #[derive(Deserialize)]
@@ -139,13 +138,8 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             let response =
                 send_graphql_request::<SessionsData>(query, serde_json::json!({})).await?;
 
-            if response.sessions.is_empty() {
-                println!("No sessions");
-            } else {
-                println!("Sessions:");
-                for session in response.sessions {
-                    println!("  {} - {} ({})", session.id, session.command, session.cwd);
-                }
+            for session in response.sessions {
+                println!("{}\t{}\t{}", session.id, session.command, session.cwd);
             }
         }
         Commands::Capture { session_id } => {
@@ -186,7 +180,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             });
 
             let response = send_graphql_request::<SessionStatusData>(query, variables).await?;
-            println!("Status: {}", response.session_status);
+            println!("{}", response.session_status);
         }
         Commands::Close { session_id } => {
             #[derive(Deserialize)]
@@ -206,10 +200,8 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             });
 
             let response = send_graphql_request::<CloseSessionData>(query, variables).await?;
-            if response.close_session {
-                println!("Session closed successfully");
-            } else {
-                println!("Session not found");
+            if !response.close_session {
+                anyhow::bail!("Session not found");
             }
         }
     }

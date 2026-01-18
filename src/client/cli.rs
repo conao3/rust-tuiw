@@ -1,5 +1,6 @@
 use crate::config::get_daemon_endpoint;
 use anyhow::Result;
+use async_graphql_parser::parse_query;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
@@ -225,6 +226,13 @@ pub async fn run_client(cli: Cli) -> Result<()> {
     Ok(())
 }
 
+fn extract_query_name(query: &str) -> Option<String> {
+    let doc = parse_query(query).ok()?;
+    doc.operations
+        .iter()
+        .find_map(|(name, _operation)| name.as_ref().map(|n| n.to_string()))
+}
+
 async fn send_graphql_request<T: for<'de> Deserialize<'de>>(
     query: &str,
     variables: serde_json::Value,
@@ -237,6 +245,8 @@ async fn send_graphql_request<T: for<'de> Deserialize<'de>>(
         variables,
     };
 
+    let query_name = extract_query_name(query).unwrap_or_else(|| "Anonymous".to_string());
+    tracing::info!("query: {}, variables: {}", query_name, request.variables);
     let response = client
         .post(format!("{}/graphql", endpoint))
         .json(&request)

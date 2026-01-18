@@ -2103,6 +2103,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-axum",
+ "async-graphql-parser",
  "async-stream",
  "axum",
  "clap",

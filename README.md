@@ -45,6 +45,20 @@ cargo build --release
 
 ### Basic Usage
 
+#### 0. Start the Daemon
+
+First, start the daemon in the background:
+
+```bash
+tuiw daemon > /tmp/tuiw-daemon.log 2>&1 &
+```
+
+Or run it in the foreground for debugging:
+
+```bash
+tuiw daemon
+```
+
 #### 1. Create a Session
 
 Create a new TUI session by specifying the command to run:
@@ -158,6 +172,10 @@ curl -X POST http://127.0.0.1:50051/graphql \
 
 ### Troubleshooting
 
+**Error: daemon is not running:**
+- Start the daemon with `tuiw daemon > /tmp/tuiw-daemon.log 2>&1 &`
+- Check if the daemon is running with `ps aux | grep "tuiw daemon"`
+
 **Daemon not starting:**
 - Check if port 50051 is available
 - Ensure tmux is installed and in PATH
@@ -178,7 +196,7 @@ The application operates in two modes:
 - **Daemon**: GraphQL server that manages tmux sessions and TUI applications
 - **Client**: CLI interface that communicates with the daemon via GraphQL
 
-On first invocation, if no daemon is running, the process automatically starts as a daemon. Subsequent invocations act as clients.
+You must start the daemon manually with `tuiw daemon` before using client commands.
 
 ### Components
 

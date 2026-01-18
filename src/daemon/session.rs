@@ -72,6 +72,10 @@ impl SessionManager {
     }
 
     pub async fn get_output(&self, id: &SessionId) -> Result<String> {
+        self.get_output_with_color(id, false).await
+    }
+
+    pub async fn get_output_with_color(&self, id: &SessionId, with_color: bool) -> Result<String> {
         let session = self
             .sessions
             .read()
@@ -80,7 +84,7 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("session not found"))?;
 
-        let output = wrapper::capture_pane(&session.tmux_session).await?;
+        let output = wrapper::capture_pane_with_color(&session.tmux_session, with_color).await?;
         Ok(output)
     }
 

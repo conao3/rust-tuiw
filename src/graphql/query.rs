@@ -11,9 +11,16 @@ impl Query {
         Ok(session_manager.list_sessions().await)
     }
 
-    async fn session_capture(&self, ctx: &Context<'_>, session_id: SessionId) -> Result<String> {
+    async fn session_capture(
+        &self,
+        ctx: &Context<'_>,
+        session_id: SessionId,
+        #[graphql(default = true)] with_color: bool,
+    ) -> Result<String> {
         let session_manager = ctx.data::<SessionManager>()?;
-        let output = session_manager.get_output(&session_id).await?;
+        let output = session_manager
+            .get_output_with_color(&session_id, with_color)
+            .await?;
         Ok(output)
     }
 

@@ -29,6 +29,8 @@ pub enum Commands {
     List,
     View {
         session_id: String,
+        #[arg(long)]
+        no_color: bool,
     },
     Status {
         session_id: String,
@@ -159,7 +161,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
                 println!("{}\t{}\t{}", session.id, session.command, session.cwd);
             }
         }
-        Commands::View { session_id } => {
+        Commands::View { session_id, no_color } => {
             #[derive(Deserialize)]
             struct SessionCaptureData {
                 #[serde(rename = "sessionCapture")]
@@ -167,13 +169,14 @@ pub async fn run_client(cli: Cli) -> Result<()> {
             }
 
             let query = r#"
-                query SessionCapture($sessionId: SessionId!) {
-                    sessionCapture(sessionId: $sessionId)
+                query SessionCapture($sessionId: SessionId!, $withColor: Boolean!) {
+                    sessionCapture(sessionId: $sessionId, withColor: $withColor)
                 }
             "#;
 
             let variables = serde_json::json!({
                 "sessionId": session_id,
+                "withColor": !no_color,
             });
 
             let response = send_graphql_request::<SessionCaptureData>(query, variables).await?;

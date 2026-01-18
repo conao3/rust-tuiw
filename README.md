@@ -108,10 +108,16 @@ tuiw send -n 2a638ef5 "Escape"
 
 #### 4. View Screen
 
-View the current screen content:
+View the current screen content with colors (default):
 
 ```bash
 tuiw view 2a638ef5
+```
+
+To view without colors, use the `--no-color` flag:
+
+```bash
+tuiw view --no-color 2a638ef5
 ```
 
 #### 5. Check Status

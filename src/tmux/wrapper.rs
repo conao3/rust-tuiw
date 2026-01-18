@@ -31,9 +31,14 @@ pub async fn send_keys(session: &str, keys: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn capture_pane(session: &str) -> Result<String> {
+pub async fn capture_pane_with_color(session: &str, with_color: bool) -> Result<String> {
+    let mut args = vec!["capture-pane", "-t", session, "-p"];
+    if with_color {
+        args.push("-e");
+    }
+
     let output = Command::new("tmux")
-        .args(["capture-pane", "-t", session, "-p"])
+        .args(&args)
         .output()
         .await
         .context("failed to execute tmux capture-pane")?;

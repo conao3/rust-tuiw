@@ -69,7 +69,7 @@ tuiw create "bash"
 
 This will output a session ID (8 character hex format):
 ```
-Session created: 2a638ef5
+2a638ef5
 ```
 
 You can also specify a working directory:
@@ -86,10 +86,9 @@ View all active sessions:
 tuiw list
 ```
 
-Output:
+Output (tab-separated):
 ```
-Sessions:
-  2a638ef5 - bash (/home/user)
+2a638ef5	bash	/home/user
 ```
 
 #### 3. Send Keys
@@ -101,12 +100,12 @@ tuiw send 2a638ef5 "echo hello"
 tuiw send 2a638ef5 "Enter"
 ```
 
-#### 4. Capture Screen
+#### 4. View Screen
 
-Capture the current screen content:
+View the current screen content:
 
 ```bash
-tuiw capture 2a638ef5
+tuiw view 2a638ef5
 ```
 
 #### 5. Check Status
@@ -129,7 +128,7 @@ tuiw close 2a638ef5
 
 ```bash
 # Create a vim session
-SESSION_ID=$(tuiw create "vim" | grep -oE '[0-9a-f]{8}')
+SESSION_ID=$(tuiw create "vim")
 
 # Open a file
 tuiw send $SESSION_ID ":e test.txt"

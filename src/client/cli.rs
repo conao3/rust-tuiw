@@ -24,7 +24,7 @@ pub enum Commands {
         keys: String,
     },
     List,
-    Capture {
+    View {
         session_id: String,
     },
     Status {
@@ -142,7 +142,7 @@ pub async fn run_client(cli: Cli) -> Result<()> {
                 println!("{}\t{}\t{}", session.id, session.command, session.cwd);
             }
         }
-        Commands::Capture { session_id } => {
+        Commands::View { session_id } => {
             #[derive(Deserialize)]
             struct SessionCaptureData {
                 #[serde(rename = "sessionCapture")]

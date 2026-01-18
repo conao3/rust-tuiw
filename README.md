@@ -22,18 +22,25 @@ rust-tuiw enables headless interaction with TUI (Terminal User Interface) applic
 
 ### Installation
 
+Install via crates.io.
+
+```bash
+cargo install tuiw
+```
+
+or install via nixpkgs.
+
+```bash
+nix shell github:conao3/rust-tuiw
+```
+
+or install from source.
+
 ```bash
 git clone https://github.com/conao3/rust-tuiw.git
 cd rust-tuiw
 cargo build --release
-```
-
-The binary will be available at `target/release/tuiw`.
-
-Alternatively, install via cargo:
-
-```bash
-cargo install tuiw
+./target/release/tuiw --help
 ```
 
 ### Basic Usage

@@ -37,6 +37,22 @@
           overlays = [overlay];
         };
       in {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "tuiw";
+          version = "0.1.2";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          nativeBuildInputs = with pkgs; [pkg-config];
+          buildInputs = with pkgs; [tmux];
+          meta = {
+            description = "TUI applications wrapper with tmux for headless operation";
+            homepage = "https://github.com/conao3/rust-tuiw";
+            license = pkgs.lib.licenses.asl20;
+          };
+        };
+
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             rustc
@@ -46,6 +62,7 @@
             rustfmt
             cargo-watch
             cargo-edit
+            tmux
           ];
         };
 

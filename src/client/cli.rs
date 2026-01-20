@@ -31,9 +31,6 @@ pub enum Commands {
         #[arg(long)]
         no_color: bool,
     },
-    Status {
-        session_id: String,
-    },
     Close {
         session_id: String,
     },
@@ -83,14 +80,6 @@ pub async fn run_client(cli: Cli) -> Result<()> {
         } => {
             let output = wrapper::capture_pane_with_color(&session_id, !no_color).await?;
             print!("{}", output);
-        }
-        Commands::Status { session_id } => {
-            let exists = wrapper::session_exists(&session_id).await?;
-            if exists {
-                println!("Running");
-            } else {
-                println!("Stopped");
-            }
         }
         Commands::Close { session_id } => {
             let exists = wrapper::session_exists(&session_id).await?;

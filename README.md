@@ -107,17 +107,7 @@ To view without colors, use the `--no-color` flag:
 tuiw view --no-color 2a638ef5
 ```
 
-#### 5. Check Status
-
-Check if a session is running:
-
-```bash
-tuiw status 2a638ef5
-```
-
-Output: `Running` or `Stopped`
-
-#### 6. Close Session
+#### 5. Close Session
 
 Terminate a session:
 
@@ -153,7 +143,6 @@ tuiw close $SESSION_ID
 - Check if the tmux session still exists with `tmux list-sessions`
 
 **Keys not being sent:**
-- Ensure the session is still running with `tuiw status`
 - By default, Enter is sent after each command. Use `-n` to suppress it
 - Special keys like Escape should be sent with `-n` flag
 

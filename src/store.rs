@@ -4,8 +4,8 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 pub fn get_store_path() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
     let tuiw_dir = config_dir.join("tuiw");
     std::fs::create_dir_all(&tuiw_dir)?;
     Ok(tuiw_dir.join("session.json"))
@@ -31,7 +31,11 @@ pub fn save_store(store: &SessionStore) -> Result<()> {
 
 pub fn add_session(id: String, command: String, cwd: String) -> Result<()> {
     let mut store = load_store()?;
-    let session = Session { id: id.clone(), command, cwd };
+    let session = Session {
+        id: id.clone(),
+        command,
+        cwd,
+    };
     store.sessions.insert(id, session);
     save_store(&store)?;
     Ok(())

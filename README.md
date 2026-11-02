@@ -45,23 +45,28 @@ cargo build --release
 
 ### Basic Usage
 
+tuiw takes arguments in the AWS CLI grammar: `tuiw [global options] session <subcommand> [--parameter value ...]`. Every parameter is named (`--kebab-case`), booleans come in `--flag` / `--no-flag` pairs, and a value starting with `file://` is read from that file (`file:///dev/stdin` reads stdin).
+
 #### 1. Create a Session
 
 Create a new TUI session by specifying the command to run:
 
 ```bash
-tuiw create "bash"
+tuiw session create-session --command bash
 ```
 
-This will output a session ID (8 character hex format):
-```
-2a638ef5
+This prints the session ID (8 character hex format):
+
+```json
+{
+  "SessionId": "2a638ef5"
+}
 ```
 
-You can also specify a working directory:
+You can also specify a working directory, and take the ID alone with `--query` and `--output text`:
 
 ```bash
-tuiw create "vim" --cwd /path/to/project
+tuiw session create-session --command vim --cwd /path/to/project --query SessionId --output text
 ```
 
 #### 2. List Sessions
@@ -69,42 +74,39 @@ tuiw create "vim" --cwd /path/to/project
 View all active tuiw sessions:
 
 ```bash
-tuiw list
+tuiw session list-sessions
+tuiw session list-sessions --query Sessions --output table
 ```
 
-Output (tab-separated: ID, command, working directory):
-```
-2a638ef5	bash	/home/user
-f3b91a2c	vim	/path/to/project
-```
+Each entry of `Sessions` has `SessionId`, `Command` and `Cwd`.
 
 #### 3. Send Keys
 
-Send keyboard input to a session. By default, Enter is sent after the keys:
+Send keyboard input to a session. `--keys` takes one or more values that are passed to `tmux send-keys` in order. By default, Enter is sent after the keys:
 
 ```bash
-tuiw send 2a638ef5 "echo hello"
+tuiw session send-keys --session-id 2a638ef5 --keys "echo hello"
 ```
 
-To send keys without Enter, use the `-n` flag:
+To send keys without Enter, use `--no-newline`:
 
 ```bash
-tuiw send -n 2a638ef5 "i"
-tuiw send -n 2a638ef5 "Escape"
+tuiw session send-keys --session-id 2a638ef5 --keys i --no-newline
+tuiw session send-keys --session-id 2a638ef5 --keys Escape --no-newline
 ```
 
 #### 4. View Screen
 
-View the current screen content with colors (default):
+Capture the current screen content with colors (default). The screen is in `Screen`:
 
 ```bash
-tuiw view 2a638ef5
+tuiw session get-screen --session-id 2a638ef5 --query Screen --output text
 ```
 
-To view without colors, use the `--no-color` flag:
+To capture without colors, use `--no-color`:
 
 ```bash
-tuiw view --no-color 2a638ef5
+tuiw session get-screen --session-id 2a638ef5 --no-color --query Screen --output text
 ```
 
 #### 5. Close Session
@@ -112,39 +114,46 @@ tuiw view --no-color 2a638ef5
 Terminate a session:
 
 ```bash
-tuiw close 2a638ef5
+tuiw session delete-session --session-id 2a638ef5
 ```
+
+#### Common options
+
+- `--output json|text|table` (default `json`) and `--query <JMESPath>` shape the output. Output keys are PascalCase.
+- `--cli-input-json '{"SessionId": "2a638ef5", "Keys": ["ls"]}'` passes the parameters as JSON (parameters given on the command line win). `--generate-cli-skeleton input|output` prints the input or output skeleton.
+- `help` works at every level: `tuiw help`, `tuiw session help`, `tuiw session send-keys help`. `--debug` prints the parsed parameters to stderr. `--version` prints the version.
+- Exit codes: 0 on success, 252 for a syntax or parameter error, 254 when tmux or the target fails (session not found, missing working directory, tmux error), 255 for other failures.
 
 ### Example: Automating vim
 
 ```bash
 # Create a vim session
-SESSION_ID=$(tuiw create "vim")
+SESSION_ID=$(tuiw session create-session --command vim --query SessionId --output text)
 
 # Open a file
-tuiw send $SESSION_ID ":e test.txt"
+tuiw session send-keys --session-id "$SESSION_ID" --keys ":e test.txt"
 
 # Enter insert mode and type
-tuiw send -n $SESSION_ID "i"
-tuiw send $SESSION_ID "Hello, World!"
+tuiw session send-keys --session-id "$SESSION_ID" --keys i --no-newline
+tuiw session send-keys --session-id "$SESSION_ID" --keys "Hello, World!"
 
 # Save and quit
-tuiw send -n $SESSION_ID "Escape"
-tuiw send $SESSION_ID ":wq"
+tuiw session send-keys --session-id "$SESSION_ID" --keys Escape --no-newline
+tuiw session send-keys --session-id "$SESSION_ID" --keys ":wq"
 
 # Close session
-tuiw close $SESSION_ID
+tuiw session delete-session --session-id "$SESSION_ID"
 ```
 
 ### Troubleshooting
 
 **Session not found:**
-- Verify the session ID is correct using `tuiw list`
+- Verify the session ID is correct using `tuiw session list-sessions`
 - Check if the tmux session still exists with `tmux list-sessions`
 
 **Keys not being sent:**
-- By default, Enter is sent after each command. Use `-n` to suppress it
-- Special keys like Escape should be sent with `-n` flag
+- By default, Enter is sent after the keys. Use `--no-newline` to suppress it
+- Special keys like Escape should be sent with `--no-newline`
 
 **tmux not found:**
 - Ensure tmux is installed and in PATH
@@ -188,7 +197,7 @@ tuiw is a simple CLI wrapper around tmux. Each tuiw session corresponds to a tmu
 - Session IDs are 8-character hexadecimal strings (derived from UUID)
 - tmux session names follow the pattern `tuiw-{session_id}`
 - Session metadata (command, cwd) is stored in `~/.config/tuiw/session.json`
-- Stale sessions (where tmux session no longer exists) are automatically cleaned up when running `create` or `list` commands
+- Stale sessions (where tmux session no longer exists) are automatically cleaned up when running `session create-session` or `session list-sessions`
 - Sessions persist until explicitly closed or tmux server is stopped
 - Multiple TUI applications can run simultaneously in separate sessions
 
@@ -213,7 +222,7 @@ Since rust-tuiw works with any TUI application, it enables automation for:
 
 - **Language**: Rust (edition 2024)
 - **Async Runtime**: tokio (minimal features)
-- **CLI Parsing**: clap
+- **CLI Parsing**: clap (AWS CLI grammar) and jmespath for `--query`
 - **Process Management**: tmux
 
 ## Development

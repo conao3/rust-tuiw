@@ -25,7 +25,7 @@ jobs:
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
@@ -94,13 +94,13 @@ jobs:
           #   os: windows-latest
           #   use-cross: false
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           ref: v${{ needs.version-bump.outputs.new_version }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/cache@v6
+      - uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.cargo/registry/index/
@@ -129,7 +129,7 @@ jobs:
           cd target/${{ matrix.target }}/release
           7z a ../../../tuiw-${{ matrix.target }}.zip tuiw.exe
         shell: pwsh
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: tuiw-${{ matrix.target }}
           path: |
@@ -144,13 +144,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           ref: v${{ needs.version-bump.outputs.new_version }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           path: artifacts
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: v${{ needs.version-bump.outputs.new_version }}
           files: |
@@ -175,11 +175,11 @@ jobs:
       name: crates.io
       url: https://crates.io/crates/tuiw
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           ref: v${{ needs.version-bump.outputs.new_version }}
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v6
+      - uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.cargo/registry/index/

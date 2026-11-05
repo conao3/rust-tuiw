@@ -1,8 +1,7 @@
 use std::ffi::OsString;
 
 use clap::error::ErrorKind;
-use clap::parser::ValueSource;
-use clap::{ArgAction, ArgMatches, Args, CommandFactory, Parser, ValueEnum};
+use clap::{Args, Parser, ValueEnum};
 use serde_json::{Map, Value};
 
 pub const EXIT_PARAM: i32 = 252;
@@ -37,9 +36,6 @@ pub struct GlobalArgs {
     /// Output format
     #[arg(long, global = true, value_enum, default_value_t = OutputFormat::Json)]
     pub output: OutputFormat,
-    /// JMESPath query applied to the output
-    #[arg(long, global = true, value_name = "JMESPATH")]
-    pub query: Option<String>,
     /// Print parsed parameters to stderr
     #[arg(long, global = true)]
     pub debug: bool,
@@ -52,76 +48,25 @@ pub enum OutputFormat {
     Table,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SkeletonKind {
-    Input,
-    Output,
-}
-
-#[derive(Args, Debug, Clone)]
-pub struct InputArgs {
-    /// Read all parameters from JSON (keys are PascalCase parameter names)
-    #[arg(long, value_name = "JSON", value_parser = parse_string)]
-    pub cli_input_json: Option<String>,
-    /// Print an input or output skeleton instead of running the command
-    #[arg(
-        long,
-        value_enum,
-        value_name = "TYPE",
-        num_args = 0..=1,
-        default_missing_value = "input"
-    )]
-    pub generate_cli_skeleton: Option<SkeletonKind>,
-}
-
-pub trait CliSpec: Parser + std::fmt::Debug {
-    fn global(&self) -> &GlobalArgs;
-    fn input(&self) -> &InputArgs;
-    fn output_skeleton(&self) -> Value;
-}
-
 pub enum Parsed<C> {
-    Run(C, Option<Value>),
+    Run(C),
     Exit(i32),
 }
 
-const INPUT_ARG_IDS: [&str; 2] = ["cli_input_json", "generate_cli_skeleton"];
-
-pub fn parse<C: CliSpec>(args: Vec<OsString>) -> Parsed<C> {
+pub fn parse<C: Parser + std::fmt::Debug>(args: Vec<OsString>) -> Parsed<C> {
     let args = normalize_help(args);
     let debug = args.iter().any(|arg| arg == "--debug");
     if debug {
         eprintln!("[debug] argv: {args:?}");
     }
-    let matches = match C::command().try_get_matches_from(&args) {
-        Ok(matches) => matches,
-        Err(err) => return Parsed::Exit(print_clap_error(err)),
-    };
-    let matches = match merge_cli_input_json::<C>(&args, matches, debug) {
-        Ok(matches) => matches,
-        Err(err) => {
-            eprintln!("{}", err.message());
-            return Parsed::Exit(err.exit_code());
-        }
-    };
-    let cli = match C::from_arg_matches(&matches) {
+    let cli = match C::try_parse_from(&args) {
         Ok(cli) => cli,
         Err(err) => return Parsed::Exit(print_clap_error(err)),
     };
     if debug {
         eprintln!("[debug] parsed: {cli:?}");
     }
-    if let Some(query) = &cli.global().query
-        && let Err(err) = jmespath::compile(query)
-    {
-        eprintln!("invalid --query: {err}");
-        return Parsed::Exit(EXIT_PARAM);
-    }
-    let skeleton = cli.input().generate_cli_skeleton.map(|kind| match kind {
-        SkeletonKind::Input => input_skeleton::<C>(&matches),
-        SkeletonKind::Output => cli.output_skeleton(),
-    });
-    Parsed::Run(cli, skeleton)
+    Parsed::Run(cli)
 }
 
 fn print_clap_error(err: clap::Error) -> i32 {
@@ -136,7 +81,7 @@ fn normalize_help(mut args: Vec<OsString>) -> Vec<OsString> {
     let mut i = 1;
     while i < args.len() {
         let arg = args[i].to_string_lossy();
-        if arg == "--output" || arg == "--query" {
+        if arg == "--output" {
             i += 2;
         } else if arg.starts_with("--") {
             i += 1;
@@ -151,177 +96,6 @@ fn normalize_help(mut args: Vec<OsString>) -> Vec<OsString> {
     args
 }
 
-fn leaf_matches<C: CommandFactory>(matches: &ArgMatches) -> Option<(clap::Command, &ArgMatches)> {
-    let (command, command_matches) = matches.subcommand()?;
-    let (subcommand, leaf) = command_matches.subcommand()?;
-    let definition = C::command()
-        .find_subcommand(command)?
-        .find_subcommand(subcommand)?
-        .clone();
-    Some((definition, leaf))
-}
-
-struct Param<'a> {
-    key: String,
-    arg: &'a clap::Arg,
-    negation: Option<&'a clap::Arg>,
-}
-
-fn params(definition: &clap::Command) -> Vec<Param<'_>> {
-    let args: Vec<&clap::Arg> = definition
-        .get_arguments()
-        .filter(|arg| arg.get_long().is_some() && !arg.is_global_set())
-        .filter(|arg| !INPUT_ARG_IDS.contains(&arg.get_id().as_str()))
-        .filter(|arg| !matches!(arg.get_id().as_str(), "help" | "version"))
-        .collect();
-    let long_of = |arg: &clap::Arg| arg.get_long().unwrap_or_default().to_string();
-    args.iter()
-        .filter(|arg| {
-            let long = long_of(arg);
-            !long
-                .strip_prefix("no-")
-                .is_some_and(|base| args.iter().any(|other| long_of(other) == base))
-        })
-        .map(|arg| {
-            let long = long_of(arg);
-            let negation = args
-                .iter()
-                .find(|other| long_of(other) == format!("no-{long}"))
-                .copied();
-            Param {
-                key: pascal_case(&long),
-                arg,
-                negation,
-            }
-        })
-        .collect()
-}
-
-pub fn pascal_case(kebab: &str) -> String {
-    kebab
-        .split('-')
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().chain(chars).collect::<String>(),
-                None => String::new(),
-            }
-        })
-        .collect()
-}
-
-fn is_flag(arg: &clap::Arg) -> bool {
-    matches!(arg.get_action(), ArgAction::SetTrue | ArgAction::SetFalse)
-}
-
-fn is_list(arg: &clap::Arg) -> bool {
-    arg.get_num_args()
-        .is_some_and(|range| range.max_values() > 1)
-}
-
-fn is_integer(arg: &clap::Arg) -> bool {
-    arg.get_value_names()
-        .is_some_and(|names| names.iter().any(|name| name == "INTEGER"))
-}
-
-fn input_skeleton<C: CommandFactory>(matches: &ArgMatches) -> Value {
-    let Some((definition, _)) = leaf_matches::<C>(matches) else {
-        return Value::Object(Map::new());
-    };
-    let map = params(&definition)
-        .into_iter()
-        .map(|param| {
-            let scalar = if is_flag(param.arg) {
-                Value::Bool(true)
-            } else if is_integer(param.arg) {
-                Value::from(0)
-            } else {
-                Value::String(String::new())
-            };
-            let value = if is_list(param.arg) {
-                Value::Array(vec![scalar])
-            } else {
-                scalar
-            };
-            (param.key, value)
-        })
-        .collect();
-    Value::Object(map)
-}
-
-fn merge_cli_input_json<C: CommandFactory>(
-    args: &[OsString],
-    matches: ArgMatches,
-    debug: bool,
-) -> Result<ArgMatches, CliError> {
-    let Some((definition, leaf)) = leaf_matches::<C>(&matches) else {
-        return Ok(matches);
-    };
-    let Some(json) = leaf.get_one::<String>("cli_input_json") else {
-        return Ok(matches);
-    };
-    let input: Map<String, Value> = serde_json::from_str(json)
-        .map_err(|err| CliError::Param(format!("invalid --cli-input-json: {err}")))?;
-    let params = params(&definition);
-    let given = |arg: &clap::Arg| {
-        leaf.value_source(arg.get_id().as_str()) == Some(ValueSource::CommandLine)
-    };
-    let mut extra: Vec<OsString> = Vec::new();
-    for (key, value) in &input {
-        let param = params
-            .iter()
-            .find(|param| &param.key == key)
-            .ok_or_else(|| {
-                CliError::Param(format!("unknown parameter in --cli-input-json: {key}"))
-            })?;
-        if given(param.arg) || param.negation.is_some_and(given) {
-            continue;
-        }
-        let long = param.arg.get_long().unwrap_or_default();
-        let invalid = || CliError::Param(format!("invalid value for {key} in --cli-input-json"));
-        if is_flag(param.arg) {
-            match (value, param.negation) {
-                (Value::Bool(true), _) => extra.push(format!("--{long}").into()),
-                (Value::Bool(false), Some(negation)) => {
-                    extra.push(format!("--{}", negation.get_long().unwrap_or_default()).into())
-                }
-                (Value::Bool(false), None) => {}
-                _ => return Err(invalid()),
-            }
-        } else if is_list(param.arg) {
-            let Value::Array(items) = value else {
-                return Err(invalid());
-            };
-            extra.push(format!("--{long}").into());
-            for item in items {
-                extra.push(scalar_token(item).ok_or_else(invalid)?.into());
-            }
-        } else {
-            let token = scalar_token(value).ok_or_else(invalid)?;
-            extra.push(format!("--{long}={token}").into());
-        }
-    }
-    if debug {
-        eprintln!("[debug] cli-input-json parameters: {extra:?}");
-    }
-    if extra.is_empty() {
-        return Ok(matches);
-    }
-    let merged: Vec<OsString> = args.iter().cloned().chain(extra).collect();
-    C::command()
-        .try_get_matches_from(merged)
-        .map_err(|err| CliError::Param(err.to_string().trim_end().to_string()))
-}
-
-fn scalar_token(value: &Value) -> Option<String> {
-    match value {
-        Value::String(s) => Some(s.clone()),
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(b) => Some(b.to_string()),
-        _ => None,
-    }
-}
-
 pub fn parse_string(value: &str) -> Result<String, String> {
     match value.strip_prefix("file://") {
         Some(path) => std::fs::read_to_string(path).map_err(|err| format!("read {path}: {err}")),
@@ -329,20 +103,8 @@ pub fn parse_string(value: &str) -> Result<String, String> {
     }
 }
 
-pub fn emit(global: &GlobalArgs, value: &Value) -> Result<(), CliError> {
-    let value = match &global.query {
-        Some(query) => {
-            let expr = jmespath::compile(query)
-                .map_err(|err| CliError::Param(format!("invalid --query: {err}")))?;
-            let found = expr
-                .search(value)
-                .map_err(|err| CliError::Param(format!("--query failed: {err}")))?;
-            serde_json::to_value(&*found).map_err(|err| CliError::Other(err.to_string()))?
-        }
-        None => value.clone(),
-    };
-    print!("{}", render(global.output, &value));
-    Ok(())
+pub fn emit(global: &GlobalArgs, value: &Value) {
+    print!("{}", render(global.output, value));
 }
 
 pub fn render(format: OutputFormat, value: &Value) -> String {
@@ -489,17 +251,13 @@ fn render_table(value: &Value) -> String {
     out
 }
 
-pub fn run<C: CliSpec>(
+pub fn run<C: Parser + std::fmt::Debug>(
     args: Vec<OsString>,
     execute: impl FnOnce(C) -> Result<(), CliError>,
 ) -> i32 {
     match parse::<C>(args) {
         Parsed::Exit(code) => code,
-        Parsed::Run(_, Some(skeleton)) => {
-            print!("{}", render(OutputFormat::Json, &skeleton));
-            0
-        }
-        Parsed::Run(cli, None) => match execute(cli) {
+        Parsed::Run(cli) => match execute(cli) {
             Ok(()) => 0,
             Err(err) => {
                 eprintln!("{}", err.message());
@@ -544,21 +302,6 @@ mod tests {
         auth: bool,
         #[arg(long, overrides_with = "auth")]
         no_auth: bool,
-        #[command(flatten)]
-        input: InputArgs,
-    }
-
-    impl CliSpec for Cli {
-        fn global(&self) -> &GlobalArgs {
-            &self.global
-        }
-        fn input(&self) -> &InputArgs {
-            let Command::Thing(ThingCommand::GetThing(args)) = &self.command;
-            &args.input
-        }
-        fn output_skeleton(&self) -> Value {
-            serde_json::json!({"Name": ""})
-        }
     }
 
     fn argv(args: &[&str]) -> Vec<OsString> {
@@ -568,11 +311,11 @@ mod tests {
             .collect()
     }
 
-    fn run_ok(args: &[&str]) -> (GetThingArgs, Option<Value>) {
+    fn run_ok(args: &[&str]) -> GetThingArgs {
         match parse::<Cli>(argv(args)) {
-            Parsed::Run(cli, skeleton) => {
+            Parsed::Run(cli) => {
                 let Command::Thing(ThingCommand::GetThing(args)) = cli.command;
-                (args, skeleton)
+                args
             }
             Parsed::Exit(code) => panic!("exited with {code}"),
         }
@@ -580,7 +323,7 @@ mod tests {
 
     fn exit_code(args: &[&str]) -> i32 {
         match parse::<Cli>(argv(args)) {
-            Parsed::Run(..) => panic!("expected exit"),
+            Parsed::Run(_) => panic!("expected exit"),
             Parsed::Exit(code) => code,
         }
     }
@@ -598,43 +341,10 @@ mod tests {
     }
 
     #[test]
-    fn input_skeleton_pairs_flags() {
-        let (_, skeleton) = run_ok(&["thing", "get-thing", "--generate-cli-skeleton"]);
-        assert_eq!(
-            skeleton.unwrap(),
-            serde_json::json!({"Name": "", "Port": 0, "Auth": true})
-        );
-    }
-
-    #[test]
-    fn cli_input_json_yields_to_explicit_parameters() {
-        let (args, _) = run_ok(&[
-            "thing",
-            "get-thing",
-            "--port",
-            "2",
-            "--cli-input-json",
-            r#"{"Name": "a", "Port": 1, "Auth": false}"#,
-        ]);
-        assert_eq!(args.name.as_deref(), Some("a"));
-        assert_eq!(args.port, Some(2));
+    fn negated_flag_overrides_the_flag() {
+        let args = run_ok(&["thing", "get-thing", "--auth", "--no-auth"]);
+        assert!(!args.auth);
         assert!(args.no_auth);
-    }
-
-    #[test]
-    fn cli_input_json_rejects_unknown_keys() {
-        assert_eq!(
-            exit_code(&["thing", "get-thing", "--cli-input-json", r#"{"X": 1}"#]),
-            EXIT_PARAM
-        );
-    }
-
-    #[test]
-    fn invalid_query_is_parameter_error() {
-        assert_eq!(
-            exit_code(&["--query", "[", "thing", "get-thing"]),
-            EXIT_PARAM
-        );
     }
 
     #[test]
@@ -642,7 +352,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("tuiw-grammar-{}", std::process::id()));
         std::fs::write(&path, "from file").unwrap();
         let value = format!("file://{}", path.display());
-        let (args, _) = run_ok(&["thing", "get-thing", "--name", &value]);
+        let args = run_ok(&["thing", "get-thing", "--name", &value]);
         std::fs::remove_file(&path).unwrap();
         assert_eq!(args.name.as_deref(), Some("from file"));
     }

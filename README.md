@@ -63,10 +63,10 @@ This prints the session ID (8 character hex format):
 }
 ```
 
-You can also specify a working directory, and take the ID alone with `--query` and `--output text`:
+You can also specify a working directory, and take the ID alone with `jq`:
 
 ```bash
-tuiw session create-session --command vim --cwd /path/to/project --query SessionId --output text
+tuiw session create-session --command vim --cwd /path/to/project | jq -r .SessionId
 ```
 
 #### 2. List Sessions
@@ -75,7 +75,7 @@ View all active tuiw sessions:
 
 ```bash
 tuiw session list-sessions
-tuiw session list-sessions --query Sessions --output table
+tuiw session list-sessions --output text
 ```
 
 Each entry of `Sessions` has `SessionId`, `Command` and `Cwd`.
@@ -100,13 +100,13 @@ tuiw session send-keys --session-id 2a638ef5 --keys Escape --no-newline
 Capture the current screen content with colors (default). The screen is in `Screen`:
 
 ```bash
-tuiw session get-screen --session-id 2a638ef5 --query Screen --output text
+tuiw session get-screen --session-id 2a638ef5 | jq -r .Screen
 ```
 
 To capture without colors, use `--no-color`:
 
 ```bash
-tuiw session get-screen --session-id 2a638ef5 --no-color --query Screen --output text
+tuiw session get-screen --session-id 2a638ef5 --no-color | jq -r .Screen
 ```
 
 #### 5. Close Session
@@ -119,8 +119,7 @@ tuiw session delete-session --session-id 2a638ef5
 
 #### Common options
 
-- `--output json|text|table` (default `json`) and `--query <JMESPath>` shape the output. Output keys are PascalCase.
-- `--cli-input-json '{"SessionId": "2a638ef5", "Keys": ["ls"]}'` passes the parameters as JSON (parameters given on the command line win). `--generate-cli-skeleton input|output` prints the input or output skeleton.
+- `--output json|text|table` (default `json`) shapes the output. Output keys are PascalCase.
 - `help` works at every level: `tuiw help`, `tuiw session help`, `tuiw session send-keys help`. `--debug` prints the parsed parameters to stderr. `--version` prints the version.
 - Exit codes: 0 on success, 252 for a syntax or parameter error, 254 when tmux or the target fails (session not found, missing working directory, tmux error), 255 for other failures.
 
@@ -128,7 +127,7 @@ tuiw session delete-session --session-id 2a638ef5
 
 ```bash
 # Create a vim session
-SESSION_ID=$(tuiw session create-session --command vim --query SessionId --output text)
+SESSION_ID=$(tuiw session create-session --command vim | jq -r .SessionId)
 
 # Open a file
 tuiw session send-keys --session-id "$SESSION_ID" --keys ":e test.txt"
@@ -222,7 +221,7 @@ Since rust-tuiw works with any TUI application, it enables automation for:
 
 - **Language**: Rust (edition 2024)
 - **Async Runtime**: tokio (minimal features)
-- **CLI Parsing**: clap (AWS CLI grammar) and jmespath for `--query`
+- **CLI Parsing**: clap (AWS CLI grammar)
 - **Process Management**: tmux
 
 ## Development

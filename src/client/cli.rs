@@ -1,10 +1,9 @@
-use crate::grammar::{CliError, CliSpec, GlobalArgs, InputArgs, emit, parse_string};
+use crate::grammar::{CliError, GlobalArgs, emit, parse_string};
 use crate::store;
 use crate::tmux::wrapper;
 use crate::types::SessionId;
 use clap::{Args, Parser, Subcommand};
 use serde::Serialize;
-use serde_json::Value;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -50,15 +49,10 @@ pub struct CreateSessionArgs {
     /// Working directory (default: current directory)
     #[arg(long, value_name = "STRING", value_parser = parse_string)]
     pub cwd: Option<String>,
-    #[command(flatten)]
-    pub input: InputArgs,
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct ListSessionsArgs {
-    #[command(flatten)]
-    pub input: InputArgs,
-}
+pub struct ListSessionsArgs {}
 
 #[derive(Args, Debug, Clone)]
 pub struct SendKeysArgs {
@@ -74,8 +68,6 @@ pub struct SendKeysArgs {
     /// Do not send Enter after the keys
     #[arg(long, overrides_with = "newline")]
     pub no_newline: bool,
-    #[command(flatten)]
-    pub input: InputArgs,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -89,8 +81,6 @@ pub struct GetScreenArgs {
     /// Strip the ANSI color escape sequences
     #[arg(long, overrides_with = "color")]
     pub no_color: bool,
-    #[command(flatten)]
-    pub input: InputArgs,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -98,11 +88,9 @@ pub struct DeleteSessionArgs {
     /// Session ID printed by create-session
     #[arg(long, value_name = "STRING", value_parser = parse_string)]
     pub session_id: Option<String>,
-    #[command(flatten)]
-    pub input: InputArgs,
 }
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct CreateSessionOutput {
     pub session_id: String,
@@ -116,51 +104,17 @@ pub struct SessionSummary {
     pub cwd: String,
 }
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct ListSessionsOutput {
     pub sessions: Vec<SessionSummary>,
 }
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct GetScreenOutput {
     pub session_id: String,
     pub screen: String,
-}
-
-impl CliSpec for Cli {
-    fn global(&self) -> &GlobalArgs {
-        &self.global
-    }
-
-    fn input(&self) -> &InputArgs {
-        let Command::Session(command) = &self.command;
-        match command {
-            SessionCommand::CreateSession(args) => &args.input,
-            SessionCommand::ListSessions(args) => &args.input,
-            SessionCommand::SendKeys(args) => &args.input,
-            SessionCommand::GetScreen(args) => &args.input,
-            SessionCommand::DeleteSession(args) => &args.input,
-        }
-    }
-
-    fn output_skeleton(&self) -> Value {
-        let Command::Session(command) = &self.command;
-        let value = match command {
-            SessionCommand::CreateSession(_) => {
-                serde_json::to_value(CreateSessionOutput::default())
-            }
-            SessionCommand::ListSessions(_) => serde_json::to_value(ListSessionsOutput {
-                sessions: vec![SessionSummary::default()],
-            }),
-            SessionCommand::GetScreen(_) => serde_json::to_value(GetScreenOutput::default()),
-            SessionCommand::SendKeys(_) | SessionCommand::DeleteSession(_) => {
-                Ok(Value::Object(serde_json::Map::new()))
-            }
-        };
-        value.expect("output skeleton serializes")
-    }
 }
 
 fn required<T>(value: Option<T>, name: &str) -> Result<T, CliError> {
@@ -173,7 +127,8 @@ fn target(err: anyhow::Error) -> CliError {
 
 fn print_output<T: Serialize>(global: &GlobalArgs, output: &T) -> Result<(), CliError> {
     let value = serde_json::to_value(output).map_err(|err| CliError::Other(err.to_string()))?;
-    emit(global, &value)
+    emit(global, &value);
+    Ok(())
 }
 
 pub async fn run_client(cli: Cli) -> Result<(), CliError> {
@@ -271,23 +226,23 @@ mod tests {
             .collect()
     }
 
-    fn run(args: &[&str]) -> (Cli, Option<Value>) {
+    fn run(args: &[&str]) -> Cli {
         match parse::<Cli>(argv(args)) {
-            Parsed::Run(cli, skeleton) => (cli, skeleton),
+            Parsed::Run(cli) => cli,
             Parsed::Exit(code) => panic!("exited with {code}"),
         }
     }
 
     fn exit_code(args: &[&str]) -> i32 {
         match parse::<Cli>(argv(args)) {
-            Parsed::Run(..) => panic!("expected exit"),
+            Parsed::Run(_) => panic!("expected exit"),
             Parsed::Exit(code) => code,
         }
     }
 
     #[test]
     fn send_keys_takes_a_list() {
-        let (cli, _) = run(&[
+        let cli = run(&[
             "session",
             "send-keys",
             "--session-id",
@@ -322,31 +277,29 @@ mod tests {
     }
 
     #[test]
-    fn skeletons() {
-        let (_, input) = run(&["session", "send-keys", "--generate-cli-skeleton"]);
+    fn output_keys_are_pascal_case() {
+        let output = ListSessionsOutput {
+            sessions: vec![SessionSummary {
+                session_id: "2a638ef5".to_string(),
+                command: "vim".to_string(),
+                cwd: "/tmp".to_string(),
+            }],
+        };
         assert_eq!(
-            input.unwrap(),
-            serde_json::json!({"SessionId": "", "Keys": [""], "Newline": true})
-        );
-        let (_, output) = run(&[
-            "session",
-            "list-sessions",
-            "--generate-cli-skeleton",
-            "output",
-        ]);
-        assert_eq!(
-            output.unwrap(),
-            serde_json::json!({"Sessions": [{"SessionId": "", "Command": "", "Cwd": ""}]})
+            serde_json::to_value(output).unwrap(),
+            serde_json::json!({"Sessions": [{"SessionId": "2a638ef5", "Command": "vim", "Cwd": "/tmp"}]})
         );
     }
 
     #[test]
-    fn cli_input_json_fills_parameters() {
-        let (cli, _) = run(&[
+    fn create_session_takes_named_parameters() {
+        let cli = run(&[
             "session",
             "create-session",
-            "--cli-input-json",
-            r#"{"Command": "vim", "Cwd": "/tmp"}"#,
+            "--command",
+            "vim",
+            "--cwd",
+            "/tmp",
         ]);
         let Command::Session(SessionCommand::CreateSession(args)) = cli.command else {
             panic!("unexpected command");

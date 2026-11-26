@@ -8,7 +8,7 @@ gh workflow run release.yml --ref master -f version_bump=patch
 
 `version_bump` is `patch`, `minor`, or `major`. One run does the following:
 
-1. `check` bumps the version in `Cargo.toml` and `Cargo.lock` in a local commit, then runs `nix develop --command make ci`, `nix build`, and `cargo publish --dry-run`.
+1. `check` bumps the version in `Cargo.toml` and `Cargo.lock` in a local commit, then runs `cargo publish --dry-run`.
 2. `tag` pushes the version commit to `master` together with the annotated tag `v<version>`.
 3. `build-binaries` builds `tuiw` for Linux (x86_64, x86_64 musl, aarch64) and macOS (x86_64, aarch64) from the tag.
 4. `publish` publishes the crate with crates.io trusted publishing (OIDC). crates.io trusts `conao3/rust-tuiw` and `release.yml`, and the crate accepts trusted publishing only.

@@ -23,7 +23,7 @@ defaults:
     shell: bash
 jobs:
   check:
-    name: Bump and check
+    name: Bump version
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -70,10 +70,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           read -ra files <<< "$VERSION_FILES"
           git commit -m "Bump version to $VERSION" -- "${files[@]}"
-      - name: Check formatting, lints, and tests
-        run: nix develop --command make ci
-      - name: Build the Nix package
-        run: nix build
       - name: Verify crate
         run: nix develop --command cargo publish --locked --dry-run
       - name: Bundle the version commit

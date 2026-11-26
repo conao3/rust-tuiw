@@ -1,76 +1,131 @@
 name: Release
-
 on:
   workflow_dispatch:
     inputs:
       version_bump:
-        description: 'Version bump type'
+        description: Version bump type
         required: true
         type: choice
         options:
           - patch
           - minor
           - major
-
+permissions:
+  contents: read
+concurrency:
+  group: release
 env:
-  CARGO_TERM_COLOR: always
-
+  CRATE: tuiw
+  VERSION_FILES: Cargo.toml Cargo.lock
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+defaults:
+  run:
+    shell: bash
 jobs:
-  version-bump:
-    name: Version Bump
+  check:
+    name: Bump and check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
-      contents: write
+      contents: read
     outputs:
-      new_version: ${{ steps.bump.outputs.new_version }}
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Require the default branch
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo "::error::Dispatch the release workflow from $DEFAULT_BRANCH."
+            exit 1
+          fi
       - uses: actions/checkout@v7.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: dtolnay/rust-toolchain@stable
-      - run: |
-          CURRENT_VERSION=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].version')
-          echo "Current version: $CURRENT_VERSION"
-
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-
-          case "${{ github.event.inputs.version_bump }}" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              patch=$((patch + 1))
-              ;;
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v32.0.0
+      - name: Choose version
+        id: version
+        env:
+          BUMP: ${{ inputs.version_bump }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(nix develop --command cargo metadata --locked --no-deps --format-version 1 | jq -er '.packages[] | select(.name == env.CRATE) | .version')
+          IFS=. read -r major minor patch <<< "$current"
+          case "$BUMP" in
+            major) version="$((major + 1)).0.0" ;;
+            minor) version="$major.$((minor + 1)).0" ;;
+            patch) version="$major.$minor.$((patch + 1))" ;;
           esac
-
-          NEW_VERSION="${major}.${minor}.${patch}"
-          echo "New version: $NEW_VERSION"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-        id: bump
-      - run: |
-          sed -i "s/^version = \".*\"/version = \"${{ steps.bump.outputs.new_version }}\"/" Cargo.toml
-      - run: cargo check
-      - run: |
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$version" --jq "[.[] | select(.ref == \"refs/tags/v$version\")] | length")
+          if [[ "$existing" != 0 ]]; then
+            echo "::error::Tag v$version already exists."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Commit version bump
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" Cargo.toml
+          nix develop --command cargo update --workspace
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock
-          git commit -m "bump version to ${{ steps.bump.outputs.new_version }}"
-          git tag "v${{ steps.bump.outputs.new_version }}"
-          git push origin HEAD:${{ github.ref_name }}
-          git push origin "v${{ steps.bump.outputs.new_version }}"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          read -ra files <<< "$VERSION_FILES"
+          git commit -m "Bump version to $VERSION" -- "${files[@]}"
+      - name: Check formatting, lints, and tests
+        run: nix develop --command make ci
+      - name: Build the Nix package
+        run: nix build
+      - name: Verify crate
+        run: nix develop --command cargo publish --locked --dry-run
+      - name: Bundle the version commit
+        run: git bundle create "$RUNNER_TEMP/release.bundle" "$GITHUB_SHA..HEAD"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}/release.bundle
+          retention-days: 1
+
+  tag:
+    name: Push commit and tag
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: release-bundle
+          path: ${{ runner.temp }}
+      - name: Push commit and tag
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          git fetch "$RUNNER_TEMP/release.bundle" HEAD
+          commit=$(git rev-parse FETCH_HEAD)
+          if [[ "$(git rev-parse "$commit^")" != "$GITHUB_SHA" ]]; then
+            echo "::error::The version commit is not a child of $GITHUB_SHA."
+            exit 1
+          fi
+          read -ra allowed <<< "$VERSION_FILES"
+          while read -r file; do
+            if [[ " ${allowed[*]} " != *" $file "* ]]; then
+              echo "::error::The version commit changes $file."
+              exit 1
+            fi
+          done < <(git diff --name-only "$GITHUB_SHA" "$commit")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "$CRATE v$VERSION" "$commit"
+          git push --atomic origin "$commit:refs/heads/$DEFAULT_BRANCH" "refs/tags/v$VERSION"
 
   build-binaries:
     name: Build ${{ matrix.target }}
+    needs: [check, tag]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    needs: [version-bump]
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -90,108 +145,72 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-14
             use-cross: false
-          # - target: x86_64-pc-windows-msvc
-          #   os: windows-latest
-          #   use-cross: false
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          ref: v${{ needs.version-bump.outputs.new_version }}
+          ref: v${{ needs.check.outputs.version }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/cache@v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-cargo-build-
-            ${{ runner.os }}-cargo-
       - if: matrix.use-cross
         run: cargo install cross --git https://github.com/cross-rs/cross
-      - run: |
-          if [ "${{ matrix.use-cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }}
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+          USE_CROSS: ${{ matrix.use-cross }}
+        run: |
+          if [[ "$USE_CROSS" == true ]]; then
+            cross build --locked --release --target "$TARGET"
           else
-            cargo build --release --target ${{ matrix.target }}
+            cargo build --locked --release --target "$TARGET"
           fi
-        shell: bash
-      - if: runner.os != 'Windows'
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../tuiw-${{ matrix.target }}.tar.gz tuiw
-      - if: runner.os == 'Windows'
-        run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../tuiw-${{ matrix.target }}.zip tuiw.exe
-        shell: pwsh
+      - name: Archive
+        env:
+          TARGET: ${{ matrix.target }}
+        run: tar czf "$CRATE-$TARGET.tar.gz" -C "target/$TARGET/release" "$CRATE"
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: tuiw-${{ matrix.target }}
-          path: |
-            tuiw-${{ matrix.target }}.tar.gz
-            tuiw-${{ matrix.target }}.zip
+          name: ${{ env.CRATE }}-${{ matrix.target }}
+          path: ${{ env.CRATE }}-${{ matrix.target }}.tar.gz
 
-  create-release:
+  publish:
+    name: Publish to crates.io
+    needs: [check, tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: v${{ needs.check.outputs.version }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v32.0.0
+      - name: Prepare the development shell
+        run: nix develop --command true
+      - uses: rust-lang/crates-io-auth-action@v1.0.6
+        id: auth
+      - name: Publish crate
+        run: nix develop --command cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  github-release:
     name: Create GitHub Release
+    needs: [check, publish, build-binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [version-bump, build-binaries]
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          ref: v${{ needs.version-bump.outputs.new_version }}
       - uses: actions/download-artifact@v8.0.2
         with:
+          pattern: ${{ env.CRATE }}-*
           path: artifacts
-      - uses: softprops/action-gh-release@v3.0.4
-        with:
-          tag_name: v${{ needs.version-bump.outputs.new_version }}
-          files: |
-            artifacts/tuiw-x86_64-unknown-linux-gnu/tuiw-x86_64-unknown-linux-gnu.tar.gz
-            artifacts/tuiw-x86_64-unknown-linux-musl/tuiw-x86_64-unknown-linux-musl.tar.gz
-            artifacts/tuiw-aarch64-unknown-linux-gnu/tuiw-aarch64-unknown-linux-gnu.tar.gz
-            artifacts/tuiw-x86_64-apple-darwin/tuiw-x86_64-apple-darwin.tar.gz
-            artifacts/tuiw-aarch64-apple-darwin/tuiw-aarch64-apple-darwin.tar.gz
-            artifacts/tuiw-x86_64-pc-windows-msvc/tuiw-x86_64-pc-windows-msvc.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-
-  publish-crates:
-    name: Publish to crates.io
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [version-bump, create-release]
-    permissions:
-      id-token: write
-    environment:
-      name: crates.io
-      url: https://crates.io/crates/tuiw
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          ref: v${{ needs.version-bump.outputs.new_version }}
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-publish-
-            ${{ runner.os }}-cargo-
-      - uses: rust-lang/crates-io-auth-action@v1.0.6
-        id: auth
-      - run: cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: gh release create "v$VERSION" artifacts/*.tar.gz --repo "$GITHUB_REPOSITORY" --verify-tag --title "$CRATE v$VERSION" --generate-notes

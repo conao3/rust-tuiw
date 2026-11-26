@@ -1,85 +1,27 @@
 # Publishing to crates.io
 
-This document describes how to publish `tuiw` to crates.io.
-
-## Prerequisites
-
-1. Create an account on [crates.io](https://crates.io/)
-2. Login via GitHub
-3. Get your API token from [https://crates.io/me](https://crates.io/me)
-
-## Setup
+The `Release` workflow (`.github/workflows/release.yml`) publishes `tuiw` to crates.io and creates the GitHub Release. Run it from the default branch:
 
 ```bash
-cargo login <your-api-token>
+gh workflow run release.yml --ref master -f version_bump=patch
 ```
 
-## Publishing Steps
+`version_bump` is `patch`, `minor`, or `major`. One run does the following:
 
-### 1. Update Version
+1. `check` bumps the version in `Cargo.toml` and `Cargo.lock` in a local commit, then runs `nix develop --command make ci`, `nix build`, and `cargo publish --dry-run`.
+2. `tag` pushes the version commit to `master` together with the annotated tag `v<version>`.
+3. `build-binaries` builds `tuiw` for Linux (x86_64, x86_64 musl, aarch64) and macOS (x86_64, aarch64) from the tag.
+4. `publish` publishes the crate with crates.io trusted publishing (OIDC). crates.io trusts `conao3/rust-tuiw` and `release.yml`, and the crate accepts trusted publishing only.
+5. `github-release` creates the GitHub Release with generated notes and attaches the `tuiw-<target>.tar.gz` archives.
 
-Edit `Cargo.toml` and bump the version:
+Keep the version in `Cargo.toml` on `master` at the latest published version, and do not push tags by hand. If a job after `tag` fails, rerun the failed jobs of the same run.
 
-```toml
-[package]
-version = "0.1.1"  # Increment as needed
-```
-
-### 2. Update CHANGELOG
-
-Document changes in the new version.
-
-### 3. Commit Changes
+After the run, `git pull` the version commit and check the release:
 
 ```bash
-git add Cargo.toml CHANGELOG.md
-git commit -m "bump version to 0.1.1"
+gh release view v<version>
+curl -s -A 'release-check/1.0' https://crates.io/api/v1/crates/tuiw | jq '.versions[0] | {num, trustpub_data}'
 ```
-
-### 4. Create Git Tag
-
-```bash
-git tag -a v0.1.1 -m "Release v0.1.1"
-git push origin v0.1.1
-```
-
-### 5. Verify Package Contents
-
-```bash
-cargo package --list
-```
-
-### 6. Dry Run
-
-```bash
-cargo publish --dry-run
-```
-
-### 7. Publish
-
-```bash
-cargo publish
-```
-
-## Post-Publishing
-
-1. Verify the package on [https://crates.io/crates/tuiw](https://crates.io/crates/tuiw)
-2. Update documentation on docs.rs
-3. Announce the release
-
-## Troubleshooting
-
-**Error: "files in working directory contain changes"**
-- Commit all changes before publishing
-- Or use `--allow-dirty` flag (not recommended)
-
-**Error: "crate name is already taken"**
-- The name `tuiw` must be available on crates.io
-- Check ownership at https://crates.io/crates/tuiw
-
-**Error: "failed to verify package"**
-- Ensure all tests pass: `cargo test`
-- Fix any compilation errors
 
 ## Versioning
 

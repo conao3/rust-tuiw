@@ -234,6 +234,14 @@ See `Makefile` for available commands:
 - `make clippy` - Run clippy lints
 - `make fmt` - Format code
 
+## Release
+
+Run the `Release` workflow from `master`. It bumps the version, pushes the commit and the tag, publishes the crate to crates.io, and attaches the binaries to the GitHub Release (`PUBLISHING.md`).
+
+```bash
+gh workflow run release.yml --ref master -f version_bump=patch
+```
+
 ## License
 
 Apache-2.0
